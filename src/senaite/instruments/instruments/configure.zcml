@@ -47,6 +47,12 @@
     factory=".agilent.masshunter.aorc.aorcimport"
     provides="bika.lims.exportimport.instruments.IInstrumentImportInterface"/>
 
+   <adapter
+    for="*"
+    name="generic_two_d_importer"
+    factory=".generic.two_d_interims.two_d_import"
+    provides="bika.lims.exportimport.instruments.IInstrumentImportInterface"/>
+
 <!-- Incomplete ...
    <adapter
     for="*"
