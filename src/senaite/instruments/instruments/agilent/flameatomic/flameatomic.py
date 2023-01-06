@@ -504,11 +504,15 @@ class MyExport(BrowserView):
             sample_type = sample_cases[item['type']]
 
             if item['type'] == 'a':
+                # sample_id
                 analysis_id = container.id
+                ans = container.getAnalyses()
+                # PeseePourFusion keywords - kw_P
+                kw_P = filter(lambda x: x.getKeyword == "PeseePourFusion", ans)
             elif (item['type'] in 'bcd'):
                 analysis_id = analysis.getReferenceAnalysesGroupID()
             weight = 0
-            if keyword == "PeseePourFusion":
+            if kw_P:
                 weight = analysis.getResult()
             if not weight:
                 weight = 0
