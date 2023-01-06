@@ -513,7 +513,8 @@ class MyExport(BrowserView):
                 analysis_id = analysis.getReferenceAnalysesGroupID()
             weight = 0
             if kw_P:
-                weight = analysis.getResult()
+                peseepourfusion = kw_P[0]
+                weight = peseepourfusion.getResult
             if not weight:
                 weight = 0
             tmprows.append([indx+1,
