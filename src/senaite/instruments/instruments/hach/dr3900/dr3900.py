@@ -218,6 +218,9 @@ class DR3900Parser(InstrumentResultsFileParser):
         )
         brains = api.search(query, ANALYSIS_CATALOG)
         analyses = dict((a.getKeyword, a) for a in brains)
+        if len(brains) < 1:
+            msg = (" No sample found with ID {}".format(analysis_id))
+            raise AnalysisNotFound(msg)
         brains = [v for k, v in analyses.items() if k.startswith(sample_service)]
         if len(brains) < 1:
             msg = (" No analysis found matching Keyword {}".format(sample_service))
@@ -235,7 +238,11 @@ class DR3900Parser(InstrumentResultsFileParser):
         )
         brains = api.search(query, SENAITE_CATALOG)
         if len(brains) < 1:
-            msg = ("No reference sample found matching Keyword {}".format(kw))
+            msg = ("No reference sample found with ID {}".format(reference_sample_id))
+            raise AnalysisNotFound(msg)
+        brains = [v for k, v in brains.items() if k == kw]
+        if len(brains) < 1:
+            msg = " No analysis found matching Keyword {}".format(kw)
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
             msg = ("Multiple brains found matching Keyword {}".format(kw))
@@ -246,9 +253,12 @@ class DR3900Parser(InstrumentResultsFileParser):
     def get_reference_sample_analysis(self, reference_sample, kw):
         kw = kw
         brains = self.get_reference_sample_analyses(reference_sample)
-        brains = [v for k, v in brains.items() if k.startswith(kw)]
         if len(brains) < 1:
-            msg = " No analysis found matching Keyword {}".format(kw)
+            msg = ("No sample found with ID {}".format(reference_sample)) 
+            raise AnalysisNotFound(msg)
+        brains = [v for k, v in brains.items() if k == kw]
+        if len(brains) < 1:
+            msg = ("No analysis found matching Keyword {}".format(kw))
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
             msg = ("Multiple brains found matching Keyword {}".format(kw))
@@ -264,13 +274,16 @@ class DR3900Parser(InstrumentResultsFileParser):
 
     def get_analysis(self, ar, kw):
         analyses = self.get_analyses(ar)
-        analyses = [v for k, v in analyses.items() if k.startswith(kw)]
         if len(analyses) < 1:
-            self.log(' No analysis found matching keyword {}'.format(kw))
-            return None
+            msg = ' No sample found with ID {}'.format(ar)
+            raise AnalysisNotFound(msg)
+        analyses = [v for k, v in analyses.items() if k == kw]
+        if len(analyses) < 1:
+            msg = ' No analysis found matching keyword {}'.format(kw)
+            raise AnalysisNotFound(msg)
         if len(analyses) > 1:
-            self.warn('Multiple analyses found matching Keyword {}'.format(kw))
-            return None
+            msg = ' Multiple analyses found matching Keyword {}'.format(kw)
+            raise MultipleAnalysesFound(msg)
         return analyses[0]
 
 
