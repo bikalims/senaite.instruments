@@ -193,7 +193,6 @@ class FlameAtomicParser(InstrumentResultsFileParser):
 
         sample_ID = row[0]
         reading = row[1]
-        factor = row[8]
 
         if not sample_ID or not reading:
             self.warn("Data not entered correctly for '{}' with sample ID '{}' and result of '{}'".format(sample_service,sample_ID,reading))
@@ -223,18 +222,16 @@ class FlameAtomicParser(InstrumentResultsFileParser):
 
         if reading == "OVER":
             if analysis_round == 3:
-                factor = 1
                 reading = 999999
             else:
                 return
         self.processed_samples_class.append({sample_ID:sample_service})
-        self.parse_results(float(reading),float(factor),keyword,sample_ID)
+        self.parse_results(float(reading),keyword,sample_ID)
         return
 
-    def parse_results(self,result,factor,keyword,sample_ID):
+    def parse_results(self,result,keyword,sample_ID):
         parsed = {}
         parsed["Reading"] = float(result)
-        parsed["Factor"] = float(factor)
         parsed.update({"DefaultResult": "Reading"})
         self._addRawResult(sample_ID, {keyword: parsed})
 
