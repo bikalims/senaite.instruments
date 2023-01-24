@@ -502,7 +502,6 @@ class MyExport(BrowserView):
             keyword = str(analysis.Keyword)
             container = uc(UID=c_uid)[0].getObject() if c_uid else None
             sample_type = sample_cases[item['type']]
-            kw_P = None
 
             if item['type'] == 'a':
                 # sample_id
@@ -518,7 +517,7 @@ class MyExport(BrowserView):
                 weight = peseepourfusion.getResult
             if not weight:
                 weight = 0
-            tmprows.append([item.get('position'),
+            tmprows.append([indx+1,
                             analysis_id,
                             sample_type,
                             weight,
@@ -541,8 +540,9 @@ class MyExport(BrowserView):
                     max_weight = items[3]
             rows[0][3] = max_weight
             unsorted_rows.append(rows[0])
+            
         unsorted_rows.sort(lambda a, b: cmp(a[0], b[0]))
-        final_rows = unsorted_rows
+        final_rows = self.row_sorter(unsorted_rows)
         result = self.dict_to_string(final_rows)
 
         setheader = self.request.RESPONSE.setHeader
@@ -562,6 +562,13 @@ class MyExport(BrowserView):
             interim_rows.append(row)
         final_rows = '\r\n'.join(interim_rows)
         return final_rows
+
+    
+    @staticmethod
+    def row_sorter(rows):
+        for indx,row in enumerate(rows):
+            row[0] = indx+1
+        return rows
 
 
 class flameatomicexport(object):
