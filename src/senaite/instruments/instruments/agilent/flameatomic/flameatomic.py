@@ -502,6 +502,7 @@ class MyExport(BrowserView):
             keyword = str(analysis.Keyword)
             container = uc(UID=c_uid)[0].getObject() if c_uid else None
             sample_type = sample_cases[item['type']]
+            kw_P = None
 
             if item['type'] == 'a':
                 # sample_id
