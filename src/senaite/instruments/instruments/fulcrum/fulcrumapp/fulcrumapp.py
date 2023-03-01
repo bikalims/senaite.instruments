@@ -47,9 +47,6 @@ from senaite.instruments.instrument import SheetNotFound
 from zope.interface import implements
 from zope.publisher.browser import FileUpload
 
-field_interim_map = {"Dilution": "Factor","Result": "Reading"}
-
-
 class SampleNotFound(Exception):
     pass
 
@@ -143,13 +140,9 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         return lines_with_parentheses
 
     def parse_row(self, row, row_nr,interim_fields):
-        parsed_strings = {}
         results,sample_id = self.get_results_values(row,row_nr)
-
-        # parsed_strings = self.interim_map_sorter(results) #Still need to figure out what's happening with the interims
-        # parsed = self.data_cleaning(parsed_strings)
-
-        # regex = re.compile('[^a-zA-Z]')
+        if sample_id == 'None':
+            return
 
         for sample_service in results.keys():
             if results.get(sample_service):
@@ -184,14 +177,13 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             self._addRawResult(sample_id, {keyword: successfully_parsed})
         return 0
 
-    @staticmethod
-    def get_results_values(row,row_nr):
+    def get_results_values(self,row,row_nr):
         barcode_ct = row.get('barcode_ct') #sample ID for other sample types
         barcode_boiler = row.get('barcode_boiler') #Sample ID for boiler water
         if barcode_ct:
             results = {} #ignore W and X
             sample_id = barcode_ct
-            analysis_service_name_maybe = row.get("tower_system_name") #N WHat is this????????????????
+            analysis_service_name_maybe = row.get("tower_system_name") #N ?
             results["ControllerConductivity"] = row.get("controller_conductivity") #O
             results["field_conductivity_"] = row.get("field_conductivity_") #P 
             results["CalPerc"] = row.get("calibration_percent") #Q
@@ -207,7 +199,7 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             results["controller_ptsa_value"] = row.get("controller_pyxis_value") #AC
         elif barcode_boiler:
             analysis_service_name_maybe = row.get("tower_system_name") #remove this?
-            sample_id = barcode_boilder
+            sample_id = barcode_boiler
             results = {}
             results["SulfiteasSO2"] = row.get("sulfite_test_result") #CC
             results["boiler_field_conductivity"] = row.get("boiler_controller_conductivity") #CD Still to be added to Bika
@@ -233,8 +225,10 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             no_id_results["ControllerTAG"] = row.get("controller_tag_value") #AB
             no_id_results["controller_ptsa_value"] = row.get("controller_pyxis_value") #AC
             if any(no_id_results.values()):
-                msg = ("No Sample ID was found for results on row {0} and {1}. Please capture results manually".format(row_nr,analysis_service_name_maybe))
-                raise SampleNotFound(msg)
+                self.warn(msg="No Sample ID was found for results on row '${r}' and '${as}'Please capture results manually",
+                    mapping={'r': row_nr, 'as': analysis_service_name_maybe})
+            results = no_id_results
+            sample_id = 'None'
         return results,sample_id
 
     @staticmethod
@@ -358,8 +352,7 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         new_lines = []
         for row in lines:
             split_row = row.encode("ascii","ignore").split(",")
-            if len(split_row) > 13:
-                new_lines.append(','.join([str(elem) for elem in split_row]))
+            new_lines.append(','.join([str(elem) for elem in split_row]))
         return new_lines
 
     @staticmethod
@@ -383,27 +376,6 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         "To be implemented if necessary"
         return True
 
-    @staticmethod
-    def interim_map_sorter(row):
-        interims = {}
-        for k,v in row.items():
-            sub = field_interim_map.get(k,'')
-            if sub != '':
-                interims[sub] = v
-        return interims
-    
-    @staticmethod
-    def data_cleaning(parsed):
-        for k,v in parsed.items():
-            #Sometimes a Factor value is not included in sheet
-            if k == "Factor" and not v:
-                parsed[k] = 1
-            else:
-                try:
-                    parsed[k] = float(v)
-                except (TypeError, ValueError):
-                    parsed[k] = v
-        return parsed
 
 class fulcrumappimport(object):
     implements(IInstrumentImportInterface, IInstrumentAutoImportInterface)
