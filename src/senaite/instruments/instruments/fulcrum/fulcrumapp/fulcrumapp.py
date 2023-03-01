@@ -150,10 +150,8 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         # parsed = self.data_cleaning(parsed_strings)
 
         # regex = re.compile('[^a-zA-Z]')
-        successfully_parsed = {}
 
         for sample_service in results.keys():
-            import pdb;pdb.set_trace()
             if results.get(sample_service):
                 try:
                     if self.is_sample(sample_id):
@@ -176,11 +174,12 @@ class FulcrumAppParser(InstrumentResultsFileParser):
                 except Exception as e:
                     self.warn(msg="Error getting analysis for '${s}/${kw}': ${e}",
                             mapping={'s': sample_id, 'kw': sample_service, 'e': repr(e)},
-                            numline=row_nr, line=str(row))
-                    return
+                            numline=row_nr)
+                    continue
             else:
                 continue
-            successfully_parsed[sample_service] = results.get('sample_service')
+            successfully_parsed = {}
+            successfully_parsed[sample_service] = results.get(sample_service)
             successfully_parsed.update({"DefaultResult": sample_service})
             self._addRawResult(sample_id, {keyword: successfully_parsed})
         return 0
@@ -188,7 +187,7 @@ class FulcrumAppParser(InstrumentResultsFileParser):
     @staticmethod
     def get_results_values(row,row_nr):
         barcode_ct = row.get('barcode_ct') #sample ID for other sample types
-        barcode_boiler = row.get('barcode_boilder') #Sample ID for boiler water
+        barcode_boiler = row.get('barcode_boiler') #Sample ID for boiler water
         if barcode_ct:
             results = {} #ignore W and X
             sample_id = barcode_ct
