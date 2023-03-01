@@ -116,10 +116,10 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         reader = csv.DictReader(ascii_lines)
         
         headers_parsed = self.parse_headerlines(reader)
-        
+        interim_fields = self.get_interim_fields()
         if headers_parsed:
             for row in reader:
-                self.parse_row(row,reader.line_num)
+                self.parse_row(row,reader.line_num,interim_fields)
         return 0
     
     def use_correct_unicode_tranformation_format(self,data,ext):
@@ -142,8 +142,7 @@ class FulcrumAppParser(InstrumentResultsFileParser):
                     lines_with_parentheses = re.sub(r'[^\x00-\x7f]',r'', data).split("\n")
         return lines_with_parentheses
 
-    def parse_row(self, row, row_nr):
-        import pdb;pdb.set_trace()
+    def parse_row(self, row, row_nr,interim_fields):
         parsed_strings = {}
         results,sample_id = self.get_results_values(row,row_nr)
 
@@ -154,26 +153,33 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         successfully_parsed = {}
 
         for sample_service in results.keys():
+            import pdb;pdb.set_trace()
             if results.get(sample_service):
                 try:
                     if self.is_sample(sample_id):
                         ar = self.get_ar(sample_id)
                         analysis = self.get_analysis(ar,sample_service)
                         keyword = analysis.getKeyword
+                        if interim_fields.get(keyword):
+                            pass #do something
                     elif self.is_analysis_group_id(sample_id):
                         analysis = self.get_duplicate_or_qc(sample_id,sample_service)
                         keyword = analysis.getKeyword
+                        if interim_fields.get(keyword):
+                            pass #do something
                     else:
                         sample_reference = self.get_reference_sample(sample_id, sample_service)
                         analysis = self.get_reference_sample_analysis(sample_reference, sample_service)
                         keyword = analysis.getKeyword()
+                        if interim_fields.get(keyword):
+                            pass #do something
                 except Exception as e:
                     self.warn(msg="Error getting analysis for '${s}/${kw}': ${e}",
                             mapping={'s': sample_id, 'kw': sample_service, 'e': repr(e)},
                             numline=row_nr, line=str(row))
                     return
             else:
-                return
+                continue
             successfully_parsed[sample_service] = results.get('sample_service')
             successfully_parsed.update({"DefaultResult": sample_service})
             self._addRawResult(sample_id, {keyword: successfully_parsed})
@@ -189,46 +195,46 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             analysis_service_name_maybe = row.get("tower_system_name") #N WHat is this????????????????
             results["ControllerConductivity"] = row.get("controller_conductivity") #O
             results["field_conductivity_"] = row.get("field_conductivity_") #P 
-            results[""] = row.get("calibration_percent") #Q
+            results["CalPerc"] = row.get("calibration_percent") #Q
             results["ControllerpH"] = row.get("controller_ph") #R 
             results["field_ph_"] = row.get("field_ph_") #S 
             results["ControllerORP"] = row.get("controller_orp") #T
             results["FAH"] = row.get("free_available_halogen") #U
             results["TAH"] = row.get("total_available_halogen") #V
-            results[""] = row.get("controller_tracer_value") #Y
+            results["controller_trasar_value"] = row.get("controller_tracer_value") #Y
             results["ControllerPTSA"] = row.get("controller_ptsa_value") #Z
             results["ControllerTrasar"] = row.get("controller_trasar_value") #AA
             results["ControllerTAG"] = row.get("controller_tag_value") #AB
-            results[""] = row.get("controller_pyxis_value") #AC
+            results["controller_ptsa_value"] = row.get("controller_pyxis_value") #AC
         elif barcode_boiler:
-            analysis_service_name_maybe = '' #remove this
+            analysis_service_name_maybe = row.get("tower_system_name") #remove this?
             sample_id = barcode_boilder
             results = {}
             results["SulfiteasSO2"] = row.get("sulfite_test_result") #CC
-            results[""] = row.get("boiler_controller_conductivity") #CD Still to be added to Bika
+            results["boiler_field_conductivity"] = row.get("boiler_controller_conductivity") #CD Still to be added to Bika
             results["BFC"] = row.get("boiler_field_conductivity") #CE
         else:
-            analysis_service_name_maybe = '' #remove this
+            analysis_service_name_maybe = row.get("tower_system_name") #remove this?
             no_id_results = {}
             no_id_results["SulfiteasSO2"] = row.get("sulfite_test_result") #CC
-            no_id_results[""] = row.get("boiler_controller_conductivity") #CD Still to be added to Bika
+            no_id_results["boiler_field_conductivity"] = row.get("boiler_controller_conductivity") #CD Still to be added to Bika
             no_id_results["BFC"] = row.get("boiler_field_conductivity")
-            analysis_service_name_maybe = row.get("tower_system_name") #N WHat is this????????????????
+            analysis_service_name_maybe = row.get("tower_system_name") #N remove maybe?
             no_id_results["ControllerConductivity"] = row.get("controller_conductivity") #O
             no_id_results["field_conductivity_"] = row.get("field_conductivity_") #P 
-            no_id_results[""] = row.get("calibration_percent") #Q
+            no_id_results["CalPerc"] = row.get("calibration_percent") #Q
             no_id_results["ControllerpH"] = row.get("controller_ph") #R 
             no_id_results["field_ph_"] = row.get("field_ph_") #S 
             no_id_results["ControllerORP"] = row.get("controller_orp") #T
             no_id_results["FAH"] = row.get("free_available_halogen") #U
             no_id_results["TAH"] = row.get("total_available_halogen") #V
-            # no_id_results[""] = row.get("controller_tracer_value") #Y
+            no_id_results["controller_trasar_value"] = row.get("controller_tracer_value") #Y
             no_id_results["ControllerPTSA"] = row.get("controller_ptsa_value") #Z
             no_id_results["ControllerTrasar"] = row.get("controller_trasar_value") #AA
             no_id_results["ControllerTAG"] = row.get("controller_tag_value") #AB
-            # no_id_results[""] = row.get("controller_pyxis_value") #AC
+            no_id_results["controller_ptsa_value"] = row.get("controller_pyxis_value") #AC
             if any(no_id_results.values()):
-                msg = ("No Sample ID was found for results on row {0} and {1}. Please capture ist results manually".format(row_nr,analysis_service_name_maybe))
+                msg = ("No Sample ID was found for results on row {0} and {1}. Please capture results manually".format(row_nr,analysis_service_name_maybe))
                 raise SampleNotFound(msg)
         return results,sample_id
 
@@ -255,6 +261,21 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             return api.get_object(brains[0])
         except IndexError:
             pass
+
+    @staticmethod
+    def get_interim_fields():
+        bsc = api.get_tool("senaite_catalog_setup")
+        query = {
+            "portal_type": "AnalysisService",
+            "is_active": True,
+            "sort_on": "sortable_title",
+        }
+        services = bsc(query,)
+        all_services = {}
+        for y in services:
+            service_obj = y.getObject()
+            all_services[service_obj.getKeyword()] = service_obj.getInterimFields()
+        return all_services
 
     @staticmethod
     def get_duplicate_or_qc(analysis_id,sample_service,):
