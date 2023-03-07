@@ -232,15 +232,19 @@ class FulcrumAppParser(InstrumentResultsFileParser):
     def get_interim_fields(sample_id):
         bc = api.get_tool(CATALOG_ANALYSIS_REQUEST_LISTING)
         ar = bc(portal_type='AnalysisRequest', id=sample_id)
-        obj = ar[0].getObject()
-        analyses = obj.getAnalyses(full_objects=True)
-        services_with_interims = {}
-        keywords = {}
-        for analysis_service in analyses:
-            if analysis_service.getInterimFields():
-                for field in analysis_service.getInterimFields():
-                    keywords[analysis_service.getKeyword()] = field.get('keyword') 
-        return keywords
+        if len(ar) == 0:
+            ar = bc(portal_type='AnalysisRequest', getClientSampleID=sample_id)
+        if len(ar) == 1:
+            obj = ar[0].getObject()
+            analyses = obj.getAnalyses(full_objects=True)
+            services_with_interims = {}
+            keywords = {}
+            for analysis_service in analyses:
+                if analysis_service.getInterimFields():
+                    for field in analysis_service.getInterimFields():
+                        keywords[analysis_service.getKeyword()] = field.get('keyword') 
+            return keywords
+        return {}
 
     @staticmethod
     def is_sample(sample_id):
@@ -407,7 +411,7 @@ class fulcrumappimport(object):
                 parser=parser,
                 context=context,
                 allowed_ar_states=status,
-                allowed_analysis_states=None,
+                allowed_analysis_states=status,
                 override=over,
                 instrument_uid=instrument,
             )
