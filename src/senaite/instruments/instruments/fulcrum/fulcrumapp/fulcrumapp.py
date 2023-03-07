@@ -108,15 +108,11 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         
         lines_with_parentheses = self.use_correct_unicode_tranformation_format(data,ext)
         lines = [i.replace('"','') for i in lines_with_parentheses]
-        
         ascii_lines = self.extract_relevant_data(lines)
-        reader = csv.DictReader(ascii_lines)
-        
-        headers_parsed = self.parse_headerlines(reader)
-        interim_fields = self.get_interim_fields()
-        if headers_parsed:
-            for row in reader:
-                self.parse_row(row,reader.line_num,interim_fields)
+        headers = ascii_lines[0]
+        for row_nr,row in enumerate(ascii_lines):
+            if row_nr!=0 and len(row) > 1:
+                self.parse_row(row,row_nr,headers)
         return 0
     
     def use_correct_unicode_tranformation_format(self,data,ext):
@@ -139,10 +135,11 @@ class FulcrumAppParser(InstrumentResultsFileParser):
                     lines_with_parentheses = re.sub(r'[^\x00-\x7f]',r'', data).split("\n")
         return lines_with_parentheses
 
-    def parse_row(self, row, row_nr,interim_fields):
-        results,sample_id = self.get_results_values(row,row_nr)
+    def parse_row(self, row, row_nr,headers):
+        results,sample_id = self.get_results_values(row,row_nr,headers)
         if sample_id == 'None':
             return
+        interim_keywords = self.get_interim_fields(sample_id)        
 
         for sample_service in results.keys():
             if results.get(sample_service):
@@ -151,85 +148,99 @@ class FulcrumAppParser(InstrumentResultsFileParser):
                         ar = self.get_ar(sample_id)
                         analysis = self.get_analysis(ar,sample_service)
                         keyword = analysis.getKeyword
-                        if interim_fields.get(keyword):
-                            pass #do something
                     elif self.is_analysis_group_id(sample_id):
                         analysis = self.get_duplicate_or_qc(sample_id,sample_service)
                         keyword = analysis.getKeyword
-                        if interim_fields.get(keyword):
-                            pass #do something
                     else:
                         sample_reference = self.get_reference_sample(sample_id, sample_service)
                         analysis = self.get_reference_sample_analysis(sample_reference, sample_service)
                         keyword = analysis.getKeyword()
-                        if interim_fields.get(keyword):
-                            pass #do something
                 except Exception as e:
                     self.warn(msg="Error getting analysis for '${s}/${kw}': ${e}",
                             mapping={'s': sample_id, 'kw': sample_service, 'e': repr(e)},
                             numline=row_nr)
                     continue
             else:
-                continue
+                if sample_service in interim_keywords.keys(): # for interims   # 'Zinc': [] , #{'Reading': 4.0, 'Factor': 1.0}
+                    interimKeyword = interim_keywords.get(sample_service)
+                    successfully_parsed = {}
+                    successfully_parsed[interimKeyword] = results.get(sample_service)
+                    successfully_parsed.update({"DefaultResult": interimKeyword})
+                    self._addRawResult(sample_id, {sample_service: successfully_parsed})
+                    continue
+                else:
+                    continue
             successfully_parsed = {}
             successfully_parsed[sample_service] = results.get(sample_service)
             successfully_parsed.update({"DefaultResult": sample_service})
             self._addRawResult(sample_id, {keyword: successfully_parsed})
         return 0
 
-    def get_results_values(self,row,row_nr):
-        barcode_ct = row.get('barcode_ct') #sample ID for other sample types
-        barcode_boiler = row.get('barcode_boiler') #Sample ID for boiler water
+    def get_results_values(self,row,row_nr,headers):
+        barcode_ct = row[12] #sample ID for other sample types M
+        barcode_boiler = row[77] #Sample ID for boiler water BZ
         if barcode_ct:
-            results = {} #ignore W and X
+            results = {} #ignore W and X,Y,AC
             sample_id = barcode_ct
-            analysis_service_name_maybe = row.get("tower_system_name") #N ?
-            results["ControllerConductivity"] = row.get("controller_conductivity") #O
-            results["field_conductivity_"] = row.get("field_conductivity_") #P 
-            results["CalPerc"] = row.get("calibration_percent") #Q
-            results["ControllerpH"] = row.get("controller_ph") #R 
-            results["field_ph_"] = row.get("field_ph_") #S 
-            results["ControllerORP"] = row.get("controller_orp") #T
-            results["FAH"] = row.get("free_available_halogen") #U
-            results["TAH"] = row.get("total_available_halogen") #V
-            results["controller_trasar_value"] = row.get("controller_tracer_value") #Y
-            results["ControllerPTSA"] = row.get("controller_ptsa_value") #Z
-            results["ControllerTrasar"] = row.get("controller_trasar_value") #AA
-            results["ControllerTAG"] = row.get("controller_tag_value") #AB
-            results["controller_ptsa_value"] = row.get("controller_pyxis_value") #AC
+            results[headers[13]] = row[13] #N ?
+            results[headers[14]] = row[14] #O
+            results[headers[15]] = row[15] #P 
+            results[headers[16]] = row[16] #Q
+            results[headers[17]] = row[17] #R 
+            results[headers[18]] = row[18] #S 
+            results[headers[19]] = row[19] #T
+            results[headers[20]] = row[20] #U
+            results[headers[21]] = row[21] #V
+            results[headers[25]] = row[25] #Z
+            results[headers[26]] = row[26] #AA
+            results[headers[27]] = row[27] #AB
         elif barcode_boiler:
-            analysis_service_name_maybe = row.get("tower_system_name") #remove this?
             sample_id = barcode_boiler
             results = {}
-            results["SulfiteasSO2"] = row.get("sulfite_test_result") #CC
-            results["boiler_field_conductivity"] = row.get("boiler_controller_conductivity") #CD Still to be added to Bika
-            results["BFC"] = row.get("boiler_field_conductivity") #CE
+            results[headers[80]] = row[80] #CC
+            results[headers[81]] = row[81] #CD Still to be added to Bika
+            results[headers[82]] = row[82] #CE
         else:
-            analysis_service_name_maybe = row.get("tower_system_name") #remove this?
+            #regular sample results
             no_id_results = {}
-            no_id_results["SulfiteasSO2"] = row.get("sulfite_test_result") #CC
-            no_id_results["boiler_field_conductivity"] = row.get("boiler_controller_conductivity") #CD Still to be added to Bika
-            no_id_results["BFC"] = row.get("boiler_field_conductivity")
-            analysis_service_name_maybe = row.get("tower_system_name") #N remove maybe?
-            no_id_results["ControllerConductivity"] = row.get("controller_conductivity") #O
-            no_id_results["field_conductivity_"] = row.get("field_conductivity_") #P 
-            no_id_results["CalPerc"] = row.get("calibration_percent") #Q
-            no_id_results["ControllerpH"] = row.get("controller_ph") #R 
-            no_id_results["field_ph_"] = row.get("field_ph_") #S 
-            no_id_results["ControllerORP"] = row.get("controller_orp") #T
-            no_id_results["FAH"] = row.get("free_available_halogen") #U
-            no_id_results["TAH"] = row.get("total_available_halogen") #V
-            no_id_results["controller_trasar_value"] = row.get("controller_tracer_value") #Y
-            no_id_results["ControllerPTSA"] = row.get("controller_ptsa_value") #Z
-            no_id_results["ControllerTrasar"] = row.get("controller_trasar_value") #AA
-            no_id_results["ControllerTAG"] = row.get("controller_tag_value") #AB
-            no_id_results["controller_ptsa_value"] = row.get("controller_pyxis_value") #AC
+            no_id_results[headers[13]] = row[13] #N ?
+            no_id_results[headers[14]] = row[14] #O
+            no_id_results[headers[15]] = row[15] #P 
+            no_id_results[headers[16]] = row[16] #Q
+            no_id_results[headers[17]] = row[17] #R 
+            no_id_results[headers[18]] = row[18] #S 
+            no_id_results[headers[19]] = row[19] #T
+            no_id_results[headers[20]] = row[20] #U
+            no_id_results[headers[21]] = row[21] #V
+            no_id_results[headers[24]] = row[24] #Y
+            no_id_results[headers[25]] = row[25] #Z
+            no_id_results[headers[26]] = row[26] #AA
+            no_id_results[headers[27]] = row[27] #AB
+            no_id_results[headers[28]] = row[28] #AC
+            #boiler sample results
+            no_id_results[headers[80]] = row[80] #CC
+            no_id_results[headers[81]] = row[81] #CD Still to be added to Bika
+            no_id_results[headers[82]] = row[82] #CE
             if any(no_id_results.values()):
-                self.warn(msg="No Sample ID was found for results on row '${r}' and '${as}'Please capture results manually",
-                    mapping={'r': row_nr, 'as': analysis_service_name_maybe})
+                self.warn(msg="No Sample ID was found for results on row '${r}'. Please capture results manually",
+                    mapping={'r': row_nr})
             results = no_id_results
             sample_id = 'None'
         return results,sample_id
+
+    @staticmethod
+    def get_interim_fields(sample_id):
+        bc = api.get_tool(CATALOG_ANALYSIS_REQUEST_LISTING)
+        ar = bc(portal_type='AnalysisRequest', id=sample_id)
+        obj = ar[0].getObject()
+        analyses = obj.getAnalyses(full_objects=True)
+        services_with_interims = {}
+        keywords = {}
+        for analysis_service in analyses:
+            if analysis_service.getInterimFields():
+                for field in analysis_service.getInterimFields():
+                    keywords[analysis_service.getKeyword()] = field.get('keyword') 
+        return keywords
 
     @staticmethod
     def is_sample(sample_id):
@@ -254,21 +265,6 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             return api.get_object(brains[0])
         except IndexError:
             pass
-
-    @staticmethod
-    def get_interim_fields():
-        bsc = api.get_tool("senaite_catalog_setup")
-        query = {
-            "portal_type": "AnalysisService",
-            "is_active": True,
-            "sort_on": "sortable_title",
-        }
-        services = bsc(query,)
-        all_services = {}
-        for y in services:
-            service_obj = y.getObject()
-            all_services[service_obj.getKeyword()] = service_obj.getInterimFields()
-        return all_services
 
     @staticmethod
     def get_duplicate_or_qc(analysis_id,sample_service,):
@@ -352,7 +348,7 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         new_lines = []
         for row in lines:
             split_row = row.encode("ascii","ignore").split(",")
-            new_lines.append(','.join([str(elem) for elem in split_row]))
+            new_lines.append(split_row)
         return new_lines
 
     @staticmethod
@@ -371,11 +367,6 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         except UnicodeDecodeError:
             return None
 
-    @staticmethod
-    def parse_headerlines(reader):
-        "To be implemented if necessary"
-        return True
-
 
 class fulcrumappimport(object):
     implements(IInstrumentImportInterface, IInstrumentAutoImportInterface)
@@ -393,7 +384,6 @@ class fulcrumappimport(object):
         warns = []
 
         infile = request.form["instrument_results_file"]
-        artoapply = request.form["artoapply"]
         override = request.form["results_override"]
         instrument = request.form.get("instrument", None)
         worksheet = request.form.get("worksheet", 0)
@@ -403,15 +393,8 @@ class fulcrumappimport(object):
             errors.append(_("No file selected"))
 
         parser = FulcrumAppParser(infile, worksheet=worksheet)
-
         if parser:
-
-            status = ["sample_received", "attachment_due", "to_be_verified"]
-            if artoapply == "received":
-                status = ["sample_received"]
-            elif artoapply == "received_tobeverified":
-                status = ["sample_received", "attachment_due", "to_be_verified"]
-
+            status = ["sample_received", "sample_due", "to_be_sampled"]
             over = [False, False]
             if override == "nooverride":
                 over = [False, False]
