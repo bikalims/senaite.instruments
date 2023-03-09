@@ -406,12 +406,13 @@ class fulcrumappimport(object):
                 over = [True, False]
             elif override == "overrideempty":
                 over = [True, True]
+            analysis_states = ["unassigned","assigned","to_be_verified","rejected","retracted","verified","published","registered"] #all of them
 
             importer = AnalysisResultsImporter(
                 parser=parser,
                 context=context,
                 allowed_ar_states=status,
-                allowed_analysis_states=status,
+                allowed_analysis_states=analysis_states,
                 override=over,
                 instrument_uid=instrument,
             )
