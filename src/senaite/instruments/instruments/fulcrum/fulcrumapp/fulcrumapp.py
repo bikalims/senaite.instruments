@@ -406,7 +406,9 @@ class fulcrumappimport(object):
                 over = [True, False]
             elif override == "overrideempty":
                 over = [True, True]
-            analysis_states = ["unassigned","assigned","to_be_verified","rejected","retracted","verified","published","registered"] #all of them
+            analysis_states = ["unassigned","assigned","registered","to_be_verified"]
+            # ["unassigned","assigned","to_be_verified","rejected","retracted","verified","published","registered"] all of them
+
 
             importer = AnalysisResultsImporter(
                 parser=parser,
