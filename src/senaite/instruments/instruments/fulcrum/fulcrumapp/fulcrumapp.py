@@ -182,7 +182,6 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         if barcode_ct:
             results = {} #ignore W and X,Y,AC
             sample_id = barcode_ct
-            results[headers[13]] = row[13] #N ?
             results[headers[14]] = row[14] #O
             results[headers[15]] = row[15] #P 
             results[headers[16]] = row[16] #Q
@@ -203,7 +202,6 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         else:
             #regular sample results
             no_id_results = {}
-            no_id_results[headers[13]] = row[13] #N ?
             no_id_results[headers[14]] = row[14] #O
             no_id_results[headers[15]] = row[15] #P 
             no_id_results[headers[16]] = row[16] #Q
