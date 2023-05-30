@@ -39,6 +39,12 @@
     factory=".fulcrum.fulcrumapp.fulcrumapp.fulcrumappimport"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
 
+    <adapter
+    for="*"
+    name="subcontract_importer"
+    factory=".agilent.subcontract.subcontract.subcontractimport"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
 <!-- Incomplete ...
    <adapter
     for="*"
