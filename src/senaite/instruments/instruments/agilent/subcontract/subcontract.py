@@ -73,6 +73,7 @@ class SubcontractParser(InstrumentResultsFileParser):
         self.worksheet = worksheet if worksheet else 0
         self.infile = infile
         self.csv_data = None
+        self.csv_comments_data = None
         self.sample_id = None
         mimetype, encoding = guess_type(self.infile.filename)
         InstrumentResultsFileParser.__init__(self, infile, mimetype)
@@ -80,7 +81,7 @@ class SubcontractParser(InstrumentResultsFileParser):
     def parse(self):
         order = []
         ext = splitext(self.infile.filename.lower())[-1]
-        if ext == ".xlsx": #fix in flameatomic also
+        if ext == ".xlsx":
             order = (xlsx_to_csv, xls_to_csv)
         elif ext == ".xls":
             order = (xls_to_csv, xlsx_to_csv)
@@ -94,6 +95,12 @@ class SubcontractParser(InstrumentResultsFileParser):
                         worksheet=self.worksheet,
                         delimiter=self.delimiter,
                     )
+                    self.infile.seek(0)
+                    self.csv_comments_data = importer(
+                        infile=self.infile,
+                        worksheet=1,
+                        delimiter=self.delimiter,
+                    )
                     break
                 except SheetNotFound:
                     self.err("Sheet not found in workbook: %s" % self.worksheet)
@@ -105,8 +112,41 @@ class SubcontractParser(InstrumentResultsFileParser):
                 return -1
 
         stub = FileStub(file=self.csv_data, name=str(self.infile.filename))
+        comments_stub = FileStub(file=self.csv_comments_data, name=str(self.infile.filename))
         self.csv_data = FileUpload(stub)
+        self.csv_comments_data = FileUpload(comments_stub)
+        
+        comments_data = self.csv_comments_data.read()
         data = self.csv_data.read()
+        lines = self.decode_read_data(data,ext)
+        comments_lines = self.decode_read_data(comments_data,ext)
+        sample_comments = self.comments_parser(comments_lines)
+        self.results_parser(lines,sample_comments)
+        return 0
+    
+    def comments_parser(self,data):
+        sample_comments = {}
+        for row_num,row in enumerate(data):
+            if row_num > 6:
+                try:
+                    sample_comments.update({row[1]:row[2]})
+                except IndexError:
+                    pass
+        return sample_comments
+    
+    def results_parser(self,data,comments):
+        for row_num,row in enumerate(data):
+            if row_num == 5:
+                sample_ids = row[1::2]
+                sample_ids.pop(0)
+            if row_num > 8:
+                if any(row[1:]): #checking if all row elements are non empty
+                    clean_row = row[::]
+                    clean_row.pop(1)
+                    clean_row.pop(1)
+                    self.parse_row(clean_row,row_num,sample_ids,comments)
+
+    def decode_read_data(self,data,ext):
         decoded_data = self.try_utf8(data)
         if decoded_data:
             if ext == ".xlsx" or ext == ".xls":
@@ -128,32 +168,15 @@ class SubcontractParser(InstrumentResultsFileParser):
                 else:
                     lines_with_parentheses = re.sub(r'[^\x00-\x7f]',r'', data).split("\n")
         lines = [i.replace('"','') for i in lines_with_parentheses]
-        
         ascii_lines = self.extract_relevant_data(lines)
+        return ascii_lines
 
-        for row_num,row in enumerate(ascii_lines):
-            if row_num == 5:
-                sample_ids = row[1::2]
-                sample_ids.pop(0)
-            if row_num > 8:
-                if any(row[1:]): #checking if all row elements are non empty
-                    clean_row = row[::]
-                    clean_row.pop(1)
-                    clean_row.pop(1)
-                    self.parse_row(clean_row,row_num,sample_ids)
-        return 0
-    
-    def clean_formatting(self, row, row_num):
-        if row_num == 5:
-            del row[1::2]
-            return row
-
-    def parse_row(self, row, row_nr,sample_ids):
+    def parse_row(self, row, row_nr,sample_ids,comments):
         sample_service = row.pop(0)
         for indx,sample_id in enumerate(sample_ids):
             result = row[2*indx]
             rl = row[(2*indx) + 1]
-            if not result and not rl:
+            if not result:
                 return
             try:
                 if self.is_sample(sample_id):
@@ -172,12 +195,22 @@ class SubcontractParser(InstrumentResultsFileParser):
                         mapping={'s': sample_id, 'kw': sample_service, 'e': repr(e)},
                         numline=row_nr, line=str(row))
                 return
-
-            parsed_results = {'Reading': result,'Uncertainty':rl }
+            if rl:
+                self.set_uncertainty(analysis,rl)
+            # Allow manual editing of of uncertainty must be ticked on analysis service
+            if comments.get(sample_id):
+                self.set_sample_remarks(ar,comments.pop(sample_id))
+            parsed_results = {'Reading': result}
             parsed_results.update({"DefaultResult": "Reading"})
             self._addRawResult(sample_id, {keyword: parsed_results})
         return 0
+    
+    def set_uncertainty(self,analysis,uncertainty_value):
+        analysis_obj = analysis.getObject()
+        analysis_obj.setUncertainty(uncertainty_value)
 
+    def set_sample_remarks(self,sample,remark):
+        sample.setRemarks(api.safe_unicode(remark))
 
     @staticmethod
     def is_sample(sample_id):
