@@ -41,8 +41,8 @@
 
     <adapter
     for="*"
-    name="subcontract_importer"
-    factory=".agilent.subcontract.subcontract.subcontractimport"
+    name="software_importer"
+    factory=".bika.software.software.softwareimport"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
 
 <!-- Incomplete ...

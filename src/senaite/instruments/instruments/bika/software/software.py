@@ -47,8 +47,6 @@ from senaite.instruments.instrument import SheetNotFound
 from zope.interface import implements
 from zope.publisher.browser import FileUpload
 
-field_interim_map = {"Dilution": "Factor","Result": "Reading"}
-
 
 class SampleNotFound(Exception):
     pass
@@ -62,10 +60,10 @@ class AnalysisNotFound(Exception):
     pass
 
 
-class SubcontractParser(InstrumentResultsFileParser):
+class SoftwareParser(InstrumentResultsFileParser):
     ar = None
 
-    def __init__(self, infile, worksheet=None, encoding=None, delimiter=None):
+    def __init__(self, infile, instrument, worksheet=None, encoding=None, delimiter=None):
         self.delimiter = delimiter if delimiter else ","
         self.encoding = encoding
         self.ar = None
@@ -75,6 +73,7 @@ class SubcontractParser(InstrumentResultsFileParser):
         self.csv_data = None
         self.csv_comments_data = None
         self.sample_id = None
+        self.instrument_uid = instrument
         mimetype, encoding = guess_type(self.infile.filename)
         InstrumentResultsFileParser.__init__(self, infile, mimetype)
 
@@ -129,17 +128,19 @@ class SubcontractParser(InstrumentResultsFileParser):
         for row_num,row in enumerate(data):
             if row_num > 6:
                 try:
-                    sample_comments.update({row[1]:row[2]})
+                    sample_comments.update({row[0]:row[1]})
                 except IndexError:
                     pass
         return sample_comments
     
     def results_parser(self,data,comments):
         for row_num,row in enumerate(data):
-            if row_num == 5:
+            if row_num == 4:
                 sample_ids = row[1::2]
                 sample_ids.pop(0)
-            if row_num > 8:
+                if not sample_ids[-1]:
+                    sample_ids.pop(-1)
+            if row_num > 7:
                 if any(row[1:]): #checking if all row elements are non empty
                     clean_row = row[::]
                     clean_row.pop(1)
@@ -177,7 +178,7 @@ class SubcontractParser(InstrumentResultsFileParser):
             result = row[2*indx]
             rl = row[(2*indx) + 1]
             if not result:
-                return
+                continue
             try:
                 if self.is_sample(sample_id):
                     ar = self.get_ar(sample_id)
@@ -197,20 +198,42 @@ class SubcontractParser(InstrumentResultsFileParser):
                 return
             if rl:
                 self.set_uncertainty(analysis,rl)
-            # Allow manual editing of of uncertainty must be ticked on analysis service
+            # Allow manual editing of uncertainty must be ticked on analysis service
             if comments.get(sample_id):
                 self.set_sample_remarks(ar,comments.pop(sample_id))
+            result = self.result_detection_limit(result,analysis)
             parsed_results = {'Reading': result}
             parsed_results.update({"DefaultResult": "Reading"})
             self._addRawResult(sample_id, {keyword: parsed_results})
         return 0
+    
+    def result_detection_limit(self,result,analysis):
+        if '<' not in result and '>' not in result:
+            return result
+        analysis_obj = analysis.getObject()
+        operand = result[0]
+        if operand == '<':
+            ldl = analysis_obj.getLowerDetectionLimit()
+            if ldl:
+                result = float(ldl) - 1
+            else:
+                result = -1
+        elif operand == '>':
+            udl = analysis_obj.getUpperDetectionLimit()
+            if udl:
+                result = float(udl) + 1
+            else:
+                result = -1
+        return str(result)
     
     def set_uncertainty(self,analysis,uncertainty_value):
         analysis_obj = analysis.getObject()
         analysis_obj.setUncertainty(uncertainty_value)
 
     def set_sample_remarks(self,sample,remark):
-        sample.setRemarks(api.safe_unicode(remark))
+        instrument_obj = api.get_object_by_uid(self.instrument_uid)
+        instrument_title = instrument_obj.Title() #use instrument name
+        sample.setRemarks(api.safe_unicode(instrument_title+ ": " + remark))
 
     @staticmethod
     def is_sample(sample_id):
@@ -364,9 +387,9 @@ class SubcontractParser(InstrumentResultsFileParser):
         return parsed
 
 
-class subcontractimport(object):
+class softwareimport(object):
     implements(IInstrumentImportInterface, IInstrumentAutoImportInterface)
-    title = "Agilent Subcontract"
+    title = "Bika Software"
     __file__ = abspath(__file__)
 
     def __init__(self, context):
@@ -389,7 +412,7 @@ class subcontractimport(object):
         if not hasattr(infile, "filename"):
             errors.append(_("No file selected"))
 
-        parser = SubcontractParser(infile, worksheet=worksheet)
+        parser = SoftwareParser(infile, instrument,worksheet=worksheet)
 
         if parser:
 
