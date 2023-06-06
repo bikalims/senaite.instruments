@@ -24,13 +24,10 @@ import traceback
 from mimetypes import guess_type
 from os.path import abspath
 from os.path import splitext
-from DateTime import DateTime
-from bika.lims.browser import BrowserView
 
 from senaite.core.exportimport.instruments import (
     IInstrumentAutoImportInterface, IInstrumentImportInterface
 )
-from senaite.core.exportimport.instruments import IInstrumentExportInterface
 from senaite.core.exportimport.instruments.resultsimport import (
     AnalysisResultsImporter)
 from senaite.core.exportimport.instruments.resultsimport import (
@@ -63,7 +60,9 @@ class AnalysisNotFound(Exception):
 class SoftwareParser(InstrumentResultsFileParser):
     ar = None
 
-    def __init__(self, infile, instrument, worksheet=None, encoding=None, delimiter=None):
+    def __init__(
+            self, infile, instrument, worksheet=None,
+            encoding=None, delimiter=None):
         self.delimiter = delimiter if delimiter else ","
         self.encoding = encoding
         self.ar = None
@@ -102,7 +101,8 @@ class SoftwareParser(InstrumentResultsFileParser):
                     )
                     break
                 except SheetNotFound:
-                    self.err("Sheet not found in workbook: %s" % self.worksheet)
+                    self.err(
+                        "Sheet not found in workbook: %s" % self.worksheet)
                     return -1
                 except Exception as e:
                     pass
@@ -110,44 +110,46 @@ class SoftwareParser(InstrumentResultsFileParser):
                 self.warn("Can't parse input file as XLS, XLSX, or CSV.")
                 return -1
 
-        stub = FileStub(file=self.csv_data, name=str(self.infile.filename))
-        comments_stub = FileStub(file=self.csv_comments_data, name=str(self.infile.filename))
+        stub = FileStub(
+            file=self.csv_data, name=str(self.infile.filename))
+        comments_stub = FileStub(
+            file=self.csv_comments_data, name=str(self.infile.filename))
         self.csv_data = FileUpload(stub)
         self.csv_comments_data = FileUpload(comments_stub)
-        
+
         comments_data = self.csv_comments_data.read()
         data = self.csv_data.read()
-        lines = self.decode_read_data(data,ext)
-        comments_lines = self.decode_read_data(comments_data,ext)
+        lines = self.decode_read_data(data, ext)
+        comments_lines = self.decode_read_data(comments_data, ext)
         sample_comments = self.comments_parser(comments_lines)
-        self.results_parser(lines,sample_comments)
+        self.results_parser(lines, sample_comments)
         return 0
-    
-    def comments_parser(self,data):
+
+    def comments_parser(self, data):
         sample_comments = {}
-        for row_num,row in enumerate(data):
+        for row_num, row in enumerate(data):
             if row_num > 6:
                 try:
-                    sample_comments.update({row[0]:row[1]})
+                    sample_comments.update({row[0]: row[1]})
                 except IndexError:
                     pass
         return sample_comments
-    
-    def results_parser(self,data,comments):
-        for row_num,row in enumerate(data):
+
+    def results_parser(self, data, comments):
+        for row_num, row in enumerate(data):
             if row_num == 4:
                 sample_ids = row[1::2]
                 sample_ids.pop(0)
                 if not sample_ids[-1]:
                     sample_ids.pop(-1)
             if row_num > 7:
-                if any(row[1:]): #checking if all row elements are non empty
+                if any(row[1:]):  # checking if all row elements are non empty
                     clean_row = row[::]
                     clean_row.pop(1)
                     clean_row.pop(1)
-                    self.parse_row(clean_row,row_num,sample_ids,comments)
+                    self.parse_row(clean_row, row_num, sample_ids, comments)
 
-    def decode_read_data(self,data,ext):
+    def decode_read_data(self, data, ext):
         decoded_data = self.try_utf8(data)
         if decoded_data:
             if ext == ".xlsx" or ext == ".xls":
@@ -158,23 +160,29 @@ class SoftwareParser(InstrumentResultsFileParser):
             decoded_data = self.try_utf16(data)
             if decoded_data:
                 if "\r\n" in decoded_data:
-                    lines_with_parentheses = data.decode('utf-16').split("\r\n")
+                    lines_with_parentheses = data.decode(
+                        'utf-16').split("\r\n")
                 elif "\n" in decoded_data:
-                    lines_with_parentheses = data.decode('utf-16').split("\n")
+                    lines_with_parentheses = data.decode(
+                        'utf-16').split("\n")
                 else:
-                    lines_with_parentheses = re.sub(r'[^\x00-\x7f]',r'', data).split("\r\n") #if bad conversion
+                    # if bad conversion
+                    lines_with_parentheses = re.sub(
+                        r'[^\x00-\x7f]', r'', data).split("\r\n")
             else:
                 if "\r\n" in data:
-                    lines_with_parentheses = re.sub(r'[^\x00-\x7f]',r'', data).split("\r\n")
+                    lines_with_parentheses = re.sub(
+                        r'[^\x00-\x7f]', r'', data).split("\r\n")
                 else:
-                    lines_with_parentheses = re.sub(r'[^\x00-\x7f]',r'', data).split("\n")
-        lines = [i.replace('"','') for i in lines_with_parentheses]
+                    lines_with_parentheses = re.sub(
+                        r'[^\x00-\x7f]', r'', data).split("\n")
+        lines = [i.replace('"', '') for i in lines_with_parentheses]
         ascii_lines = self.extract_relevant_data(lines)
         return ascii_lines
 
-    def parse_row(self, row, row_nr,sample_ids,comments):
+    def parse_row(self, row, row_nr, sample_ids, comments):
         sample_service = row.pop(0)
-        for indx,sample_id in enumerate(sample_ids):
+        for indx, sample_id in enumerate(sample_ids):
             result = row[2*indx]
             rl = row[(2*indx) + 1]
             if not result:
@@ -182,32 +190,38 @@ class SoftwareParser(InstrumentResultsFileParser):
             try:
                 if self.is_sample(sample_id):
                     ar = self.get_ar(sample_id)
-                    analysis = self.get_analysis(ar,sample_service)
+                    analysis = self.get_analysis(ar, sample_service)
                     keyword = analysis.getKeyword
-                elif self.is_analysis_group_id(sample_id): #Needs changing if will be used from key to title
-                    analysis = self.get_duplicate_or_qc(sample_id,sample_service)
+                elif self.is_analysis_group_id(sample_id):  # No QC's
+                    analysis = self.get_duplicate_or_qc(
+                        sample_id, sample_service)
                     keyword = analysis.getKeyword
                 else:
-                    sample_reference = self.get_reference_sample(sample_id, sample_service) #Needs changing if will be used
-                    analysis = self.get_reference_sample_analysis(sample_reference, sample_service)
+                    sample_reference = self.get_reference_sample(
+                        sample_id, sample_service)  # No QC's
+                    analysis = self.get_reference_sample_analysis(
+                        sample_reference, sample_service)
                     keyword = analysis.getKeyword()
             except Exception as e:
                 self.warn(msg="Error getting analysis for '${s}/${kw}': ${e}",
-                        mapping={'s': sample_id, 'kw': sample_service, 'e': repr(e)},
-                        numline=row_nr, line=str(row))
+                          mapping={
+                              's': sample_id,
+                              'kw': sample_service,
+                              'e': repr(e)},
+                          numline=row_nr, line=str(row))
                 return
             if rl:
-                self.set_uncertainty(analysis,rl)
-            # Allow manual editing of uncertainty must be ticked on analysis service
+                self.set_uncertainty(analysis, rl)
+            # Allow manual editing of uncertainty
             if comments.get(sample_id):
-                self.set_sample_remarks(ar,comments.pop(sample_id))
-            result = self.result_detection_limit(result,analysis)
+                self.set_sample_remarks(ar, comments.pop(sample_id))
+            result = self.result_detection_limit(result, analysis)
             parsed_results = {'Reading': result}
             parsed_results.update({"DefaultResult": "Reading"})
             self._addRawResult(sample_id, {keyword: parsed_results})
         return 0
-    
-    def result_detection_limit(self,result,analysis):
+
+    def result_detection_limit(self, result, analysis):
         if '<' not in result and '>' not in result:
             return result
         analysis_obj = analysis.getObject()
@@ -225,15 +239,15 @@ class SoftwareParser(InstrumentResultsFileParser):
             else:
                 result = -1
         return str(result)
-    
-    def set_uncertainty(self,analysis,uncertainty_value):
+
+    def set_uncertainty(self, analysis, uncertainty_value):
         analysis_obj = analysis.getObject()
         analysis_obj.setUncertainty(uncertainty_value)
 
-    def set_sample_remarks(self,sample,remark):
+    def set_sample_remarks(self, sample, remark):
         instrument_obj = api.get_object_by_uid(self.instrument_uid)
-        instrument_title = instrument_obj.Title() #use instrument name
-        sample.setRemarks(api.safe_unicode(instrument_title+ ": " + remark))
+        instrument_title = instrument_obj.Title()  # use instrument name
+        sample.setRemarks(api.safe_unicode(instrument_title + ": " + remark))
 
     @staticmethod
     def is_sample(sample_id):
@@ -241,16 +255,15 @@ class SoftwareParser(InstrumentResultsFileParser):
         brains = api.search(query, CATALOG_ANALYSIS_REQUEST_LISTING)
         return True if brains else False
 
-
     @staticmethod
     def is_analysis_group_id(analysis_group_id):
         portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
         query = dict(
-            portal_type=portal_types, getReferenceAnalysesGroupID=analysis_group_id
+            portal_type=portal_types,
+            getReferenceAnalysesGroupID=analysis_group_id
         )
         brains = api.search(query, ANALYSIS_CATALOG)
         return True if brains else False
-
 
     @staticmethod
     def get_ar(sample_id):
@@ -262,7 +275,7 @@ class SoftwareParser(InstrumentResultsFileParser):
             pass
 
     @staticmethod
-    def get_duplicate_or_qc(analysis_id,sample_service,):
+    def get_duplicate_or_qc(analysis_id, sample_service,):
         portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
         query = dict(
             portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id
@@ -272,24 +285,30 @@ class SoftwareParser(InstrumentResultsFileParser):
         if len(brains) < 1:
             msg = (" No sample found with ID {}".format(analysis_id))
             raise AnalysisNotFound(msg)
-        brains = [v for k, v in analyses.items() if k.startswith(sample_service)]
+        brains = [
+            v for k, v in analyses.items() if k.startswith(sample_service)]
         if len(brains) < 1:
-            msg = (" No analysis found matching Title {}".format(sample_service))
+            msg = (
+                " No analysis found matching Title {}".format(
+                    sample_service))
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
-            msg = ("Multiple brains found matching Title {}".format(sample_service))
+            msg = (
+                "Multiple brains found matching Title {}".format(
+                    sample_service))
             raise MultipleAnalysesFound(msg)
         return brains[0]
-
 
     @staticmethod
     def get_reference_sample(reference_sample_id, kw):
         query = dict(
             portal_type="ReferenceSample", getId=reference_sample_id
-        )#This method might not be needed
+        )  # This method might not be needed
         brains = api.search(query, SENAITE_CATALOG)
         if len(brains) < 1:
-            msg = ("No reference sample found with ID {}".format(reference_sample_id))
+            msg = (
+                "No reference sample found with ID {}".format(
+                    reference_sample_id))
             raise AnalysisNotFound(msg)
         brains = [v for k, v in brains.items() if k == kw]
         if len(brains) < 1:
@@ -300,12 +319,11 @@ class SoftwareParser(InstrumentResultsFileParser):
             raise MultipleAnalysesFound(msg)
         return brains[0]
 
-
     def get_reference_sample_analysis(self, reference_sample, title):
         title = title
         brains = self.get_reference_sample_analyses(reference_sample)
         if len(brains) < 1:
-            msg = ("No sample found with ID {}".format(reference_sample)) 
+            msg = ("No sample found with ID {}".format(reference_sample))
             raise AnalysisNotFound(msg)
         brains = [v for k, v in brains.items() if k == title]
         if len(brains) < 1:
@@ -316,12 +334,10 @@ class SoftwareParser(InstrumentResultsFileParser):
             raise MultipleAnalysesFound(msg)
         return brains[0]
 
-
     @staticmethod
     def get_reference_sample_analyses(reference_sample):
         brains = reference_sample.getObject().getReferenceAnalyses()
         return dict((a.Title, a) for a in brains)
-
 
     def get_analysis(self, ar, title):
         analyses = self.get_analyses(ar)
@@ -337,18 +353,16 @@ class SoftwareParser(InstrumentResultsFileParser):
             raise MultipleAnalysesFound(msg)
         return analyses[0]
 
-
     @staticmethod
     def get_analyses(ar):
         analyses = ar.getAnalyses()
         return dict((a.Title, a) for a in analyses)
 
-
     @staticmethod
     def extract_relevant_data(lines):
         new_lines = []
         for row in lines:
-            split_row = row.encode("ascii","ignore").split(",")
+            split_row = row.encode("ascii", "ignore").split(",")
             new_lines.append(split_row)
         return new_lines
 
@@ -359,7 +373,7 @@ class SoftwareParser(InstrumentResultsFileParser):
             return data.decode('utf-8')
         except UnicodeDecodeError:
             return None
-    
+
     @staticmethod
     def try_utf16(data):
         """Returns a Unicode object on success, or None on failure"""
@@ -367,24 +381,6 @@ class SoftwareParser(InstrumentResultsFileParser):
             return data.decode('utf-16')
         except UnicodeDecodeError:
             return None
-
-    @staticmethod
-    def parse_headerlines(reader):
-        "To be implemented if necessary"
-        return True
-
-    @staticmethod
-    def data_cleaning(parsed):
-        for k,v in parsed.items():
-            #Sometimes a Factor value is not included in sheet
-            if k == "Factor" and not v:
-                parsed[k] = 1
-            else:
-                try:
-                    parsed[k] = float(v)
-                except (TypeError, ValueError):
-                    parsed[k] = v
-        return parsed
 
 
 class softwareimport(object):
@@ -412,15 +408,17 @@ class softwareimport(object):
         if not hasattr(infile, "filename"):
             errors.append(_("No file selected"))
 
-        parser = SoftwareParser(infile, instrument,worksheet=worksheet)
+        parser = SoftwareParser(infile, instrument, worksheet=worksheet)
 
         if parser:
 
-            status = ["sample_received", "attachment_due", "to_be_verified"]
+            status = [
+                "sample_received", "attachment_due", "to_be_verified"]
             if artoapply == "received":
                 status = ["sample_received"]
             elif artoapply == "received_tobeverified":
-                status = ["sample_received", "attachment_due", "to_be_verified"]
+                status = [
+                    "sample_received", "attachment_due", "to_be_verified"]
 
             over = [False, False]
             if override == "nooverride":
