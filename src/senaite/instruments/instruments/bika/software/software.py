@@ -213,8 +213,8 @@ class SoftwareParser(InstrumentResultsFileParser):
             if rl:
                 self.set_uncertainty(analysis, rl)
             # Allow manual editing of uncertainty
-            if comments.get(sample_id):
-                self.set_sample_remarks(ar, comments.pop(sample_id))
+            # if comments.get(sample_id):
+                # self.set_sample_remarks(ar, comments.pop(sample_id))
             result = self.result_detection_limit(result, analysis)
             parsed_results = {'Reading': result}
             parsed_results.update({"DefaultResult": "Reading"})
