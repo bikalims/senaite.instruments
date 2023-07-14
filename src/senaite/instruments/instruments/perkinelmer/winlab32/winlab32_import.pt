@@ -21,19 +21,6 @@
     <legend class="col-form-label-lg">Advanced options</legend>
 
     <div class="form-group">
-        <label for="worksheet">Worksheet name</label>
-
-        <input type="text"
-               class="form-control"
-               id="worksheet"
-               name="worksheet"
-               value="Concentrations"/>
-        <small class="form-text text-muted">
-            You can also enter a sheet index, starting from 0.
-        </small>
-    </div>
-
-    <div class="form-group">
         <label for="artoapply">Samples state</label>
         <select name="artoapply" class="form-control" id="artoapply">
             <option value="received">

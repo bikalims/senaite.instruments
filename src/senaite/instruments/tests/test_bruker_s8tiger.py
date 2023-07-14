@@ -94,13 +94,13 @@ class TestBrukerS8Tiger(BaseTestCase):
 
         self.services = [
             self.add_analysisservice(title='Ag 107',
-                                     Keyword='ag107',
+                                     Keyword='Ag107',
                                      PointOfCapture='lab',
                                      Category='Metals',
                                      Calculation='Dilution',
                                      InterimFields=service_interims),
-            self.add_analysisservice(title='al 27',
-                                     Keyword='al27',
+            self.add_analysisservice(title='Al 27',
+                                     Keyword='Al27',
                                      PointOfCapture='lab',
                                      Category='Metals',
                                      Calculation='Dilution',
@@ -130,8 +130,8 @@ class TestBrukerS8Tiger(BaseTestCase):
             default_unit='pct',
             instrument=''))
         results = importer.Import(self.portal, request)
-        ag = ar.getAnalyses(full_objects=True, getKeyword='ag107')[0]
-        al = ar.getAnalyses(full_objects=True, getKeyword='al27')[0]
+        ag = ar.getAnalyses(full_objects=True, getKeyword='Ag107')[0]
+        al = ar.getAnalyses(full_objects=True, getKeyword='Al27')[0]
         test_results = eval(results)  # noqa
         self.assertEqual(ag.getResult(), '111.8')
         self.assertEqual(al.getResult(), '222.8')
@@ -156,38 +156,11 @@ class TestBrukerS8Tiger(BaseTestCase):
             default_unit='pct',
             instrument=''))
         results = importer.Import(self.portal, request)
-        ag = ar.getAnalyses(full_objects=True, getKeyword='ag107')[0]
-        al = ar.getAnalyses(full_objects=True, getKeyword='al27')[0]
+        ag = ar.getAnalyses(full_objects=True, getKeyword='Ag107')[0]
+        al = ar.getAnalyses(full_objects=True, getKeyword='Al27')[0]
         test_results = eval(results)  # noqa
         self.assertEqual(ag.getResult(), '111.8')
         self.assertEqual(al.getResult(), '222.8')
-
-    def test_import_ppm(self):
-        ar = self.add_analysisrequest(
-            self.client,
-            dict(Client=self.client.UID(),
-                 Contact=self.contact.UID(),
-                 DateSampled=datetime.now().date().isoformat(),
-                 SampleType=self.sampletype.UID()),
-            [srv.UID() for srv in self.services])
-        api.do_transition_for(ar, 'receive')
-        data = open(fn2, 'rb').read()
-        import_file = FileUpload(TestFile(cStringIO.StringIO(data), fn2))
-        request = TestRequest(form=dict(
-            instrument_results_file_format='xlsx',
-            submitted=True,
-            artoapply='received_tobeverified',
-            results_override='override',
-            instrument_results_file=import_file,
-            default_unit='ppm',
-            instrument=''))
-        results = importer.Import(self.portal, request)
-        ag = ar.getAnalyses(full_objects=True, getKeyword='ag107')[0]
-        al = ar.getAnalyses(full_objects=True, getKeyword='al27')[0]
-        test_results = eval(results)  # noqa
-        self.assertEqual(ag.getResult(), '1118000.0')
-        self.assertEqual(al.getResult(), '2228000.0')
-
 
 def test_suite():
     suite = unittest.TestSuite()

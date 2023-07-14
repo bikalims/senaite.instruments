@@ -8,6 +8,31 @@
     factory=".agilent.chemstation.chemstation.chemstationimport"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
 
+   <adapter
+    for="*"
+    name="flameatomic_importer"
+    factory=".agilent.flameatomic.flameatomic.flameatomicimport"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
+
+   <adapter
+    for="*"
+    name="flameatomic_exporter"
+    factory=".agilent.flameatomic.flameatomic.flameatomicexport"
+    provides="senaite.core.exportimport.instruments.IInstrumentExportInterface"/>
+    
+    <adapter
+    for="*"
+    name="dr3900_importer"
+    factory=".hach.dr3900.dr3900.dr3900import"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
+    <adapter
+    for="*"
+    name="dr3900_exporter"
+    factory=".hach.dr3900.dr3900.dr3900export"
+    provides="senaite.core.exportimport.instruments.IInstrumentExportInterface"/>
+
 <!-- Incomplete ...
    <adapter
     for="*"

@@ -1,0 +1,8 @@
+"DR3900 ,S/N 2150436"
+"Instrument Version:,1.28"
+"Parameter:,Date:,Operator ID:,Sample ID:,Sample Number,Sampling Date:,Sampling Operator:,Program,Dilution,Lot #:,Date of Expiry:,Result,Unit,Name,Error,AQA,Lot #:,Date of Expiry:,Multiple Determination,Comment:,Wavelength1,Value1,Unit1,Wavelength2,Value2,Unit2,Wavelength3,Value3,Unit3,Wavelength4,Value4,Unit4"
+"FNU,2022/06/21 21:46:09,,DU-0001,,2022/06/20 00:00:00,,P656,1.0000,,,  32.9,mg/L,SiO₂,,,,,,,452, 0.298,Abs,"
+"FNU,2022/06/21 21:45:15,,DU-0002,,2022/06/20 00:00:00,,P656,2.0000,,,  34.5,mg/L,SiO₂,,,,,,,452, 0.312,Abs,"
+"FNU,2022/06/21 21:44:16,,DU-0003,,2022/06/20 00:00:00,,P656,,,,  38.0,mg/L,SiO₂,,,,,,,452, 0.344,Abs,"
+"FNU,2022/06/21 21:43:45,,DU-0004,,2022/06/20 00:00:00,,P656,1.0000,,,  34.3,mg/L,SiO₂,,,,,,,452, 0.311,Abs,"
+

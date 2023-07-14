@@ -19,27 +19,31 @@
 # Some rights reserved, see README and LICENSE.
 import csv
 import json
+import types
 import traceback
+from cStringIO import StringIO
 from mimetypes import guess_type
+from openpyxl import load_workbook
 from os.path import abspath
 from os.path import basename
 from os.path import splitext
 from re import subn
+from xlrd import open_workbook
 
-from senaite.core.exportimport.instruments import IInstrumentAutoImportInterface
-from senaite.core.exportimport.instruments import IInstrumentImportInterface
-from senaite.core.exportimport.instruments.resultsimport import \
-    AnalysisResultsImporter
-from senaite.core.exportimport.instruments.resultsimport import \
-    InstrumentResultsFileParser
+from senaite.core.exportimport.instruments import (
+    IInstrumentAutoImportInterface, IInstrumentImportInterface
+)
+from senaite.core.exportimport.instruments.resultsimport import (
+    AnalysisResultsImporter)
+from senaite.core.exportimport.instruments.resultsimport import (
+    InstrumentResultsFileParser)
 
 from bika.lims import api
 from bika.lims import bikaMessageFactory as _
 from bika.lims.catalog import CATALOG_ANALYSIS_REQUEST_LISTING
+from senaite.core.catalog import ANALYSIS_CATALOG, SENAITE_CATALOG
 from senaite.instruments.instrument import FileStub
 from senaite.instruments.instrument import SheetNotFound
-from senaite.instruments.instrument import xls_to_csv
-from senaite.instruments.instrument import xlsx_to_csv
 from zope.interface import implements
 from zope.publisher.browser import FileUpload
 
@@ -53,7 +57,7 @@ field_interim_map = {
     "LLD": "lld",
     "Stat. error": "stat_error",
     "Analyzed layer": "analyzed_layer",
-    "Bound %": "bound_pct"
+    "Bound %": "bound_pct",
 }
 
 
@@ -72,10 +76,8 @@ class AnalysisNotFound(Exception):
 class S8TigerParser(InstrumentResultsFileParser):
     ar = None
 
-    def __init__(self, infile, worksheet=None, encoding=None,
-                 default_unit=None, delimiter=None):
-        self.delimiter = delimiter if delimiter else ','
-        self.unit = default_unit if default_unit else "pct"
+    def __init__(self, infile, worksheet=None, encoding=None, delimiter=None):
+        self.delimiter = delimiter if delimiter else ","
         self.encoding = encoding
         self.ar = None
         self.analyses = None
@@ -83,17 +85,79 @@ class S8TigerParser(InstrumentResultsFileParser):
         self.infile = infile
         self.csv_data = None
         self.sample_id = None
-        mimetype = guess_type(self.infile.filename)
+        mimetype, encoding = guess_type(self.infile.filename)
         InstrumentResultsFileParser.__init__(self, infile, mimetype)
+
+    def xls_to_csv(self, infile, worksheet=0, delimiter=","):
+        """
+        Convert xlsx to easier format first, since we want to use the
+        convenience of the CSV library
+
+        """
+
+        def find_sheet(wb, worksheet):
+            for sheet in wb.sheets():
+                if sheet.name == worksheet:
+                    return sheet
+
+        wb = open_workbook(file_contents=infile.read())
+        sheet = wb.sheets()[worksheet]
+
+        buffer = StringIO()
+
+        # extract all rows
+        for row in sheet.get_rows():
+            line = []
+            for cell in row:
+                value = cell.value
+                if type(value) in types.StringTypes:
+                    value = value.encode("utf8")
+                if value is None:
+                    value = ""
+                line.append(str(value))
+            print >> buffer, delimiter.join(line)
+        buffer.seek(0)
+        return buffer
+
+    def xlsx_to_csv(self, infile, worksheet=None, delimiter=","):
+        worksheet = worksheet if worksheet else 0
+        wb = load_workbook(filename=infile)
+        if worksheet in wb.sheetnames:
+            sheet = wb[worksheet]
+        else:
+            try:
+                index = int(worksheet)
+                sheet = wb.worksheets[index]
+            except (ValueError, TypeError, IndexError):
+                raise SheetNotFound
+
+        buffer = StringIO()
+        for row in sheet.rows:
+            line = []
+            for cell in row:
+                new_val = ''
+                if cell.number_format == "0.00%":
+                    new_val = '{}%'.format(cell.value * 100)
+                cellval = new_val if new_val else cell.value
+
+                value = "" if cellval is None else str(cellval).encode("utf8")
+                if "\n" in value:  # fixme multi-line cell gives only first line
+                    value = value.split("\n")[0]
+                line.append(value.strip())
+            if not any(line):
+                continue
+            buffer.write(delimiter.join(line) + "\n")
+        buffer.seek(0)
+        return buffer
 
     def parse(self):
         order = []
         ext = splitext(self.infile.filename.lower())[-1]
-        if ext == '.xlsx':
-            order = (xlsx_to_csv, xls_to_csv)
-        elif ext == '.xls':
-            order = (xls_to_csv, xlsx_to_csv)
-        elif ext == '.csv':
+        if ext == ".xlsx":
+            order = (self.xlsx_to_csv, self.xls_to_csv)
+        elif ext == ".xls":
+            order = (self.xls_to_csv, self.xlsx_to_csv)
+        elif ext == ".csv":
             self.csv_data = self.infile
         if order:
             for importer in order:
@@ -101,7 +165,8 @@ class S8TigerParser(InstrumentResultsFileParser):
                     self.csv_data = importer(
                         infile=self.infile,
                         worksheet=self.worksheet,
-                        delimiter=self.delimiter)
+                        delimiter=self.delimiter,
+                    )
                     break
                 except SheetNotFound:
                     self.err("Sheet not found in workbook: %s" % self.worksheet)
@@ -116,81 +181,163 @@ class S8TigerParser(InstrumentResultsFileParser):
 
         try:
             sample_id, ext = splitext(basename(self.infile.filename))
-            # maybe the filename is a sample ID, just the way it is
-            ar = self.get_ar(sample_id)
-            if not ar:
+            portal_type = self.get_portal_type(sample_id)
+            # Check for sample, duplicates and reference analysis(QC)
+            if not portal_type:
                 # maybe we need to chop of it's -9digit suffix
-                sample_id = '-'.join(sample_id.split('-')[:-1])
-                ar = self.get_ar(sample_id)
-                if not ar:
+                sample_id = "-".join(sample_id.split("-")[:-1])
+                portal_type = self.get_portal_type(sample_id)
+                if not portal_type:
                     # or we are out of luck
                     msg = "Can't find sample for " + self.infile.filename
                     self.warn(msg)
                     return -1
-            self.ar = ar
+
             self.sample_id = sample_id
-            self.analyses = self.get_analyses(ar)
         except Exception as e:
             self.err(repr(e))
             return False
         lines = self.csv_data.readlines()
         reader = csv.DictReader(lines)
-        for row in reader:
-            self.parse_row(ar, reader.line_num, row)
+        if portal_type == "AnalysisRequest":
+            for row in reader:
+                self.parse_ar_row(sample_id, reader.line_num, row)
+
+        elif portal_type in ["DuplicateAnalysis", "ReferenceAnalysis"]:
+            for row in reader:
+                self.parse_duplicate_row(sample_id, reader.line_num, row)
+
+        elif portal_type == "ReferenceSample":
+            for row in reader:
+                self.parse_reference_sample_row(sample_id, reader.line_num, row)
         return 0
 
-    def parse_row(self, ar, row_nr, row):
-        # convert row to use interim field names
-        if 'reading' not in field_interim_map.values():
-            self.err("Missing 'reading' interim field.")
-            return -1
-        parsed = {field_interim_map.get(k, ''): v for k, v in row.items()}
+    def get_portal_type(self, sample_id):
+        portal_type = None
+        if self.is_sample(sample_id):
+            ar = self.get_ar(sample_id)
+            self.ar = ar
+            self.analyses = self.get_analyses(ar)
+            portal_type = ar.portal_type
+        elif self.is_analysis_group_id(sample_id):
+            portal_type = "DuplicateAnalysis"
+        elif self.is_reference_sample(sample_id):
+            portal_type = "ReferenceSample"
+        return portal_type
 
-        formula = parsed.get('formula')
+    def parse_row(self, row_nr, row, keyword):
+        parsed = {field_interim_map.get(k, ""): v for k, v in row.items()}
+        # Concentration can be PPM or PCT as it likes, I'll save both.
+        concentration = parsed["concentration"]
+        try:
+            val = float(subn(r'[^.\d]', '', str(concentration))[0])
+        except (TypeError, ValueError, IndexError):
+            self.warn(
+                msg="Can't extract numerical value from `concentration`",
+                numline=row_nr,
+                line=str(row),
+            )
+            parsed["reading"] = ""
+            return 0
+        else:
+            if "ppm" in concentration.lower():
+                parsed["reading"] = val * 0.0001
+            elif "%" in concentration:
+                parsed["reading"] = val
+            else:
+                self.warn(
+                    "Can't decide if reading units are PPM or %",
+                    numline=row_nr,
+                    line=str(row),
+                )
+                return 0
+
+        parsed.update({"DefaultResult": "reading"})
+
+        self._addRawResult(self.sample_id, {keyword: parsed})
+        return 0
+
+    def parse_ar_row(self, sample_id, row_nr, row):
+        ar = self.get_ar(sample_id)
+        # convert row to use interim field names
+        parsed = {field_interim_map.get(k, ""): v for k, v in row.items()}
+
+        formula = parsed.get("formula")
         kw = subn(r'[^\w\d\-_]*', '', formula)[0]
-        kw = kw.lower()
         try:
             analysis = self.get_analysis(ar, kw)
             if not analysis:
                 return 0
             keyword = analysis.getKeyword
         except Exception as e:
-            self.warn(msg="Error getting analysis for '${kw}': ${e}",
-                      mapping={'kw': kw, 'e': repr(e)},
-                      numline=row_nr, line=str(row))
+            self.warn(
+                msg="Error getting analysis for '${kw}': ${e}",
+                mapping={"kw": kw, "e": repr(e)},
+                numline=row_nr,
+                line=str(row),
+            )
             return
+        return self.parse_row(row_nr, row, keyword)
 
-        # Concentration can be PPM or PCT as it likes, I'll save both.
-        concentration = parsed['concentration']
+    def parse_duplicate_row(self, sample_id, row_nr, row):
+        # convert row to use interim field names
+        parsed = {field_interim_map.get(k, ""): v for k, v in row.items()}
         try:
-            val = float(subn(r'[^.\d]', '', str(concentration))[0])
-        except (TypeError, ValueError, IndexError):
-            self.warn(msg="Can't extract numerical value from `concentration`",
-                      numline=row_nr, line=str(row))
-            parsed['reading_pct'] = ''
-            parsed['reading_ppm'] = ''
-            return 0
-        else:
-            if 'reading_ppm' in concentration.lower():
-                parsed['reading_pct'] = val * 0.0001
-                parsed['reading_ppm'] = val
-            elif '%' in concentration:
-                parsed['reading_pct'] = val
-                parsed['reading_ppm'] = 1 / 0.0001 * val
-            else:
-                self.warn("Can't decide if reading units are PPM or %",
-                          numline=row_nr, line=str(row))
-                return 0
+            formula = parsed.get("formula")
+            kw = subn(r'[^\w\d\-_]*', '', formula)[0]
+            keyword = self.getDuplicateKeyord(sample_id, kw)
+        except Exception as e:
+            self.warn(
+                msg="Error getting analysis for '${kw}': ${e}",
+                mapping={"kw": kw, "e": repr(e)},
+                numline=row_nr,
+                line=str(row),
+            )
+            return
+        return self.parse_row(row_nr, row, keyword)
 
-        if self.unit == 'ppm':
-            reading = parsed['reading_ppm']
-        else:
-            reading = parsed['reading_pct']
-        parsed['reading'] = reading
-        parsed.update({'DefaultResult': 'reading'})
+    def getDuplicateKeyord(self, sample_id, kw):
+        analysis = self.get_duplicate_or_qc_analysis(sample_id, kw)
+        return analysis.getKeyword
 
-        self._addRawResult(self.sample_id, {keyword: parsed})
-        return 0
+    def parse_reference_sample_row(self, sample_id, row_nr, row):
+        # convert row to use interim field names
+        parsed = {field_interim_map.get(k, ""): v for k, v in row.items()}
+        try:
+            formula = parsed.get("formula")
+            kw = subn(r'[^\w\d\-_]*', '', formula)[0]
+            keyword = self.getReferenceSampleKeyword(sample_id, kw)
+        except Exception as e:
+            self.warn(
+                msg="Error getting analysis for '${kw}': ${e}",
+                mapping={"kw": kw, "e": repr(e)},
+                numline=row_nr,
+                line=str(row),
+            )
+            return
+        return self.parse_row(row_nr, row, keyword)
+
+    def getReferenceSampleKeyword(self, sample_id, kw):
+        sample_reference = self.get_reference_sample(sample_id, kw)
+        analysis = self.get_reference_sample_analysis(sample_reference, kw)
+        return analysis.getKeyword()
+
+    @staticmethod
+    def get_duplicate_or_qc_analysis(analysis_id, kw):
+        portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
+        query = dict(
+            portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id
+        )
+        brains = api.search(query, ANALYSIS_CATALOG)
+        analyses = dict((a.getKeyword, a) for a in brains)
+        brains = [v for k, v in analyses.items() if k.startswith(kw)]
+        if len(brains) < 1:
+            msg = ("No analysis found matching Keyword '${kw}'",)
+            raise AnalysisNotFound(msg, kw=kw)
+        if len(brains) > 1:
+            msg = ("Multiple brains found matching Keyword '${kw}'",)
+            raise MultipleAnalysesFound(msg, kw=kw)
+        return brains[0]
 
     @staticmethod
     def get_ar(sample_id):
@@ -202,6 +349,12 @@ class S8TigerParser(InstrumentResultsFileParser):
             pass
 
     @staticmethod
+    def is_sample(sample_id):
+        query = dict(portal_type="AnalysisRequest", getId=sample_id)
+        brains = api.search(query, CATALOG_ANALYSIS_REQUEST_LISTING)
+        return True if brains else False
+
+    @staticmethod
     def get_analyses(ar):
         analyses = ar.getAnalyses()
         return dict((a.getKeyword, a) for a in analyses)
@@ -210,14 +363,45 @@ class S8TigerParser(InstrumentResultsFileParser):
         analyses = self.get_analyses(ar)
         analyses = [v for k, v in analyses.items() if k.startswith(kw)]
         if len(analyses) < 1:
-            self.log('No analysis found matching keyword "${kw}"',
-                     mapping=dict(kw=kw))
+            self.log('No analysis found matching keyword "${kw}"', mapping=dict(kw=kw))
             return None
         if len(analyses) > 1:
-            self.warn('Multiple analyses found matching Keyword "${kw}"',
-                      mapping=dict(kw=kw))
+            self.warn(
+                'Multiple analyses found matching Keyword "${kw}"', mapping=dict(kw=kw)
+            )
             return None
         return analyses[0]
+
+    @staticmethod
+    def is_analysis_group_id(analysis_group_id):
+        portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
+        query = dict(
+            portal_type=portal_types, getReferenceAnalysesGroupID=analysis_group_id
+        )
+        brains = api.search(query, ANALYSIS_CATALOG)
+        return True if brains else False
+
+    @staticmethod
+    def is_reference_sample(reference_sample_id):
+        query = dict(
+            portal_type="ReferenceSample", getId=reference_sample_id
+        )
+        brains = api.search(query, SENAITE_CATALOG)
+        return True if brains else False
+
+    @staticmethod
+    def get_reference_sample(reference_sample_id, kw):
+        query = dict(
+            portal_type="ReferenceSample", getId=reference_sample_id
+        )
+        brains = api.search(query, SENAITE_CATALOG)
+        if len(brains) < 1:
+            msg = ("No reference sample found matching Keyword '${kw}'",)
+            raise AnalysisNotFound(msg, kw=kw)
+        if len(brains) > 1:
+            msg = ("Multiple brains found matching Keyword '{}'".format(kw))
+            raise MultipleAnalysesFound(msg)
+        return brains[0]
 
 
 class importer(object):
@@ -235,32 +419,29 @@ class importer(object):
         logs = []
         warns = []
 
-        infile = request.form['instrument_results_file']
-        if not hasattr(infile, 'filename'):
+        infile = request.form["instrument_results_file"]
+        if not hasattr(infile, "filename"):
             errors.append(_("No file selected"))
 
-        artoapply = request.form['artoapply']
-        override = request.form['results_override']
-        instrument = request.form.get('instrument', None)
-        default_unit = request.form['default_unit']
-        worksheet = request.form.get('worksheet', 0)
-        parser = S8TigerParser(infile,
-                               worksheet=worksheet,
-                               default_unit=default_unit)
+        artoapply = request.form["artoapply"]
+        override = request.form["results_override"]
+        instrument = request.form.get("instrument", None)
+        worksheet = request.form.get("worksheet", 0)
+        parser = S8TigerParser(infile, worksheet=worksheet)
         if parser:
 
-            status = ['sample_received', 'attachment_due', 'to_be_verified']
-            if artoapply == 'received':
-                status = ['sample_received']
-            elif artoapply == 'received_tobeverified':
-                status = ['sample_received', 'attachment_due', 'to_be_verified']
+            status = ["sample_received", "attachment_due", "to_be_verified"]
+            if artoapply == "received":
+                status = ["sample_received"]
+            elif artoapply == "received_tobeverified":
+                status = ["sample_received", "attachment_due", "to_be_verified"]
 
             over = [False, False]
-            if override == 'nooverride':
+            if override == "nooverride":
                 over = [False, False]
-            elif override == 'override':
+            elif override == "override":
                 over = [True, False]
-            elif override == 'overrideempty':
+            elif override == "overrideempty":
                 over = [True, True]
 
             importer = AnalysisResultsImporter(
@@ -269,7 +450,8 @@ class importer(object):
                 allowed_ar_states=status,
                 allowed_analysis_states=None,
                 override=over,
-                instrument_uid=instrument)
+                instrument_uid=instrument,
+            )
 
             try:
                 importer.process()
@@ -279,6 +461,6 @@ class importer(object):
             except Exception as e:
                 errors.extend([repr(e), traceback.format_exc()])
 
-        results = {'errors': errors, 'log': logs, 'warns': warns}
+        results = {"errors": errors, "log": logs, "warns": warns}
 
         return json.dumps(results)
