@@ -104,4 +104,10 @@
     factory=".perkinelmer.nexion350x.nexion350x.importer"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
 
+   <adapter
+    for="*"
+    name="lactoscopeh23061316_importer"
+    factory=".perkinelmer.lactoscope.lactoscopeh23061316.importer"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
 </configure>
