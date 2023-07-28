@@ -193,7 +193,6 @@ class FlameAtomicParser(InstrumentResultsFileParser):
 
         sample_ID = row[0]
         reading = row[1]
-        factor = row[8]
 
         if not sample_ID or not reading:
             self.warn("Data not entered correctly for '{}' with sample ID '{}' and result of '{}'".format(sample_service,sample_ID,reading))
@@ -223,18 +222,16 @@ class FlameAtomicParser(InstrumentResultsFileParser):
 
         if reading == "OVER":
             if analysis_round == 3:
-                factor = 1
                 reading = 999999
             else:
                 return
         self.processed_samples_class.append({sample_ID:sample_service})
-        self.parse_results(float(reading),float(factor),keyword,sample_ID)
+        self.parse_results(float(reading),keyword,sample_ID)
         return
 
-    def parse_results(self,result,factor,keyword,sample_ID):
+    def parse_results(self,result,keyword,sample_ID):
         parsed = {}
         parsed["Reading"] = float(result)
-        parsed["Factor"] = float(factor)
         parsed.update({"DefaultResult": "Reading"})
         self._addRawResult(sample_ID, {keyword: parsed})
 
@@ -518,7 +515,7 @@ class MyExport(BrowserView):
                 weight = peseepourfusion.getResult
             if not weight:
                 weight = 0
-            tmprows.append([item.get('position'),
+            tmprows.append([indx+1,
                             analysis_id,
                             sample_type,
                             weight,
@@ -541,8 +538,9 @@ class MyExport(BrowserView):
                     max_weight = items[3]
             rows[0][3] = max_weight
             unsorted_rows.append(rows[0])
+            
         unsorted_rows.sort(lambda a, b: cmp(a[0], b[0]))
-        final_rows = unsorted_rows
+        final_rows = self.row_sorter(unsorted_rows)
         result = self.dict_to_string(final_rows)
 
         setheader = self.request.RESPONSE.setHeader
@@ -562,6 +560,13 @@ class MyExport(BrowserView):
             interim_rows.append(row)
         final_rows = '\r\n'.join(interim_rows)
         return final_rows
+
+    
+    @staticmethod
+    def row_sorter(rows):
+        for indx,row in enumerate(rows):
+            row[0] = indx+1
+        return rows
 
 
 class flameatomicexport(object):

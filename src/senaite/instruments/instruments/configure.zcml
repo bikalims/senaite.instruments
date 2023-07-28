@@ -33,6 +33,18 @@
     factory=".hach.dr3900.dr3900.dr3900export"
     provides="senaite.core.exportimport.instruments.IInstrumentExportInterface"/>
 
+    <adapter
+    for="*"
+    name="fulcrumapp_importer"
+    factory=".fulcrum.fulcrumapp.fulcrumapp.fulcrumappimport"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
+    <adapter
+    for="*"
+    name="software_importer"
+    factory=".bika.software.software.softwareimport"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
 <!-- Incomplete ...
    <adapter
     for="*"
