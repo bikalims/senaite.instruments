@@ -209,7 +209,6 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
 
     def parse_row(self, row_nr, parsed, keyword):
         parsed.update({"DefaultResult": keyword})
-        import pdb; pdb.set_trace()
         self._addRawResult(parsed.get("SampleID"), {keyword: parsed})
         return 0
 
@@ -244,10 +243,10 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
                 self.parse_row(row_nr, new_dict, keyword)
             except Exception as e:
                 self.warn(
-                    msg="Error getting analysis for '${kw}': ${e}",
-                    mapping={"kw": kw, "e": repr(e)},
+                    msg="Error getting analysis for '${kw}': ${sample_id}",
+                    mapping={"kw": kw, "sample_id": sample_id},
                     numline=row_nr,
-                    line=str(row),
+                    # line=str(row),
                 )
                 warnings = True
         if warnings:
@@ -256,14 +255,28 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
     def parse_duplicate_row(self, sample_id, row_nr, row):
         parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in row.items()}
         parsed = {subn(r'ppm', '', k)[0]: v for k, v in parsed.items() if k}
+
+        warnings = False
         for kw, v in parsed.items():
-            if kw == "SolutionLabel":
+            if kw == "InstrumentSerialNumber":
+                continue
+            if kw == "DateTimeofAnalysis":
+                continue
+            if kw == "Lab":
+                continue
+            if kw == "ProductName":
                 continue
             try:
                 keyword = self.getDuplicateKeyord(sample_id, kw)
-                new_dict = {"SolutionLabel": parsed['SolutionLabel'],
-                            kw: parsed[kw]}
-            except Exception:
+                new_dict = {
+                        "Lab": parsed['Lab'],
+                        "ProductName": parsed['ProductName'],
+                        "InstrumentSerialNumber": parsed['InstrumentSerialNumber'],
+                        "DateTimeofAnalysis": parsed['DateTimeofAnalysis'],
+                        "SampleID": parsed['SampleID'],
+                        kw: parsed[kw]}
+                self.parse_row(row_nr, new_dict, keyword)
+            except Exception as e:
                 self.warn(
                     msg="Error getting analysis for '${kw}': ${sample_id}",
                     mapping={"kw": kw, "sample_id": sample_id},
@@ -271,10 +284,9 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
                     # line=str(row),
                 )
                 warnings = True
-            else:
-                self.parse_row(row_nr, new_dict, keyword)
         if warnings:
             return 0
+
 
     def getDuplicateKeyord(self, sample_id, kw):
         analysis = self.get_duplicate_or_qc_analysis(sample_id, kw)
@@ -283,22 +295,35 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
     def parse_reference_sample_row(self, sample_id, row_nr, row):
         parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in row.items()}
         parsed = {subn(r'ppm', '', k)[0]: v for k, v in parsed.items() if k}
+
+        warnings = False
         for kw, v in parsed.items():
-            if kw == "SolutionLabel":
+            if kw == "InstrumentSerialNumber":
+                continue
+            if kw == "DateTimeofAnalysis":
+                continue
+            if kw == "Lab":
+                continue
+            if kw == "ProductName":
                 continue
             try:
                 keyword = self.getReferenceSampleKeyword(sample_id, kw)
-                new_dict = {"SolutionLabel": parsed['SolutionLabel'],
-                            kw: parsed[kw]}
-            except Exception:
+                new_dict = {
+                        "Lab": parsed['Lab'],
+                        "ProductName": parsed['ProductName'],
+                        "InstrumentSerialNumber": parsed['InstrumentSerialNumber'],
+                        "DateTimeofAnalysis": parsed['DateTimeofAnalysis'],
+                        "SampleID": parsed['SampleID'],
+                        kw: parsed[kw]}
+                self.parse_row(row_nr, new_dict, keyword)
+            except Exception as e:
                 self.warn(
                     msg="Error getting analysis for '${kw}': ${sample_id}",
                     mapping={"kw": kw, "sample_id": sample_id},
                     numline=row_nr,
+                    # line=str(row),
                 )
                 warnings = True
-            else:
-                self.parse_row(row_nr, new_dict, keyword)
         if warnings:
             return 0
 

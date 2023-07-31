@@ -34,6 +34,7 @@ from bika.lims import api
 from senaite.instruments.instruments.perkinelmer.lactoscope.lactoscopeh23061316 import importer
 from senaite.instruments.tests import TestFile
 from senaite.instruments.tests.base import BaseTestCase
+from senaite.instruments.tests.base import DataTestCase
 from zope.publisher.browser import FileUpload
 from zope.publisher.browser import TestRequest
 
@@ -52,7 +53,7 @@ calculation_interims = [
 ]
 
 
-class TestLactoscopeH23061316COMP(BaseTestCase):
+class TestLactoscopeH23061316COMP(DataTestCase):
 
     def setUp(self):
         super(TestLactoscopeH23061316COMP, self).setUp()
@@ -97,6 +98,9 @@ class TestLactoscopeH23061316COMP(BaseTestCase):
                  SampleType=self.sampletype.UID()),
             [srv.UID() for srv in self.services])
         api.do_transition_for(ar, 'receive')
+        # worksheet - test breaks on worksheet when adding an attachment
+        # worksheet = self.add_worksheet(ar)
+        # duplicate = self.add_duplicate(worksheet)
         data = open(fn1, 'rb').read()
         import_file = FileUpload(TestFile(cStringIO.StringIO(data), fn1))
         request = TestRequest(form=dict(
@@ -109,7 +113,6 @@ class TestLactoscopeH23061316COMP(BaseTestCase):
         results = importer.Import(self.portal, request)
         pfm = ar.getAnalyses(full_objects=True, getKeyword='PredictedFatmm')[0]
         ppm = ar.getAnalyses(full_objects=True, getKeyword='PredictedProteinmm')[0]
-        import pdb; pdb.set_trace()
         test_results = eval(results)  # noqa
         self.assertEqual(pfm.getResult(), '5.22')
         self.assertEqual(ppm.getResult(), '3.88')
