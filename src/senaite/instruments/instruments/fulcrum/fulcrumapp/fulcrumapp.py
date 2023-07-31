@@ -47,6 +47,7 @@ from senaite.instruments.instrument import SheetNotFound
 from zope.interface import implements
 from zope.publisher.browser import FileUpload
 
+
 class SampleNotFound(Exception):
     pass
 
@@ -78,7 +79,7 @@ class FulcrumAppParser(InstrumentResultsFileParser):
     def parse(self):
         order = []
         ext = splitext(self.infile.filename.lower())[-1]
-        if ext == ".xlsx": #fix in flameatomic also
+        if ext == ".xlsx":  # fix in flameatomic also
             order = (xlsx_to_csv, xls_to_csv)
         elif ext == ".xls":
             order = (xls_to_csv, xlsx_to_csv)
@@ -94,7 +95,8 @@ class FulcrumAppParser(InstrumentResultsFileParser):
                     )
                     break
                 except SheetNotFound:
-                    self.err("Sheet not found in workbook: %s" % self.worksheet)
+                    self.err(
+                        "Sheet not found in workbook: %s" % self.worksheet)
                     return -1
                 except Exception as e:
                     pass
@@ -105,68 +107,92 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         stub = FileStub(file=self.csv_data, name=str(self.infile.filename))
         self.csv_data = FileUpload(stub)
         data = self.csv_data.read()
-        
-        lines_with_parentheses = self.use_correct_unicode_tranformation_format(data,ext)
-        lines = [i.replace('"','') for i in lines_with_parentheses]
+
+        lines_with_parentheses = self.use_correct_unicode_tranformation_format(
+                                                            data, ext)
+        lines = [i.replace('"', '') for i in lines_with_parentheses]
         ascii_lines = self.extract_relevant_data(lines)
         headers = ascii_lines[0]
-        for row_nr,row in enumerate(ascii_lines):
-            if row_nr!=0 and len(row) > 1:
-                self.parse_row(row,row_nr,headers)
+        for row_nr, row in enumerate(ascii_lines):
+            if row_nr != 0 and len(row) > 1:
+                self.parse_row(row, row_nr, headers)
         return 0
-    
-    def use_correct_unicode_tranformation_format(self,data,ext):
+
+    def use_correct_unicode_tranformation_format(self, data, ext):
         decoded_data = self.try_utf8(data)
         if decoded_data:
-                lines_with_parentheses = decoded_data.split("\n")
+            lines_with_parentheses = decoded_data.split("\n")
         else:
             decoded_data = self.try_utf16(data)
             if decoded_data:
                 if "\r\n" in decoded_data:
-                    lines_with_parentheses = data.decode('utf-16').split("\r\n")
+                    lines_with_parentheses = data.decode(
+                                                'utf-16').split("\r\n")
                 elif "\n" in decoded_data:
-                    lines_with_parentheses = data.decode('utf-16').split("\n")
+                    lines_with_parentheses = data.decode(
+                                                'utf-16').split("\n")
                 else:
-                    lines_with_parentheses = re.sub(r'[^\x00-\x7f]',r'', data).split("\r\n") #if bad conversion
+                    lines_with_parentheses = re.sub(
+                                r'[^\x00-\x7f]',
+                                r'',
+                                data).split("\r\n")  # if bad conversion
             else:
                 if "\r\n" in data:
-                    lines_with_parentheses = re.sub(r'[^\x00-\x7f]',r'', data).split("\r\n")
+                    lines_with_parentheses = re.sub(
+                                r'[^\x00-\x7f]',
+                                r'',
+                                data).split("\r\n")
                 else:
-                    lines_with_parentheses = re.sub(r'[^\x00-\x7f]',r'', data).split("\n")
+                    lines_with_parentheses = re.sub(
+                                r'[^\x00-\x7f]',
+                                r'',
+                                data).split("\n")
         return lines_with_parentheses
 
-    def parse_row(self, row, row_nr,headers):
-        results,sample_id = self.get_results_values(row,row_nr,headers)
+    def parse_row(self, row, row_nr, headers):
+        results, sample_id = self.get_results_values(row, row_nr, headers)
         if sample_id == 'None':
             return
-        interim_keywords = self.get_interim_fields(sample_id)        
+        interim_keywords = self.get_interim_fields(sample_id)
 
         for sample_service in results.keys():
             if results.get(sample_service):
                 try:
                     if self.is_sample(sample_id):
                         ar = self.get_ar(sample_id)
-                        analysis = self.get_analysis(ar,sample_service)
+                        analysis = self.get_analysis(ar, sample_service)
                         keyword = analysis.getKeyword
                     elif self.is_analysis_group_id(sample_id):
-                        analysis = self.get_duplicate_or_qc(sample_id,sample_service)
+                        analysis = self.get_duplicate_or_qc(
+                                            sample_id, sample_service)
                         keyword = analysis.getKeyword
                     else:
-                        sample_reference = self.get_reference_sample(sample_id, sample_service)
-                        analysis = self.get_reference_sample_analysis(sample_reference, sample_service)
+                        sample_reference = self.get_reference_sample(
+                                            sample_id, sample_service)
+                        analysis = self.get_reference_sample_analysis(
+                                            sample_reference, sample_service)
                         keyword = analysis.getKeyword()
                 except Exception as e:
-                    self.warn(msg="Error getting analysis for '${s}/${kw}': ${e}",
-                            mapping={'s': sample_id, 'kw': sample_service, 'e': repr(e)},
+                    self.warn(
+                            msg="Error getting analysis for"
+                                " '${s}/${kw}': ${e}",
+                            mapping={
+                                's': sample_id, '
+                                kw': sample_service,
+                                'e': repr(e)},
                             numline=row_nr)
                     continue
             else:
-                if sample_service in interim_keywords.keys(): # for interims   # 'Zinc': [] , #{'Reading': 4.0, 'Factor': 1.0}
+                if sample_service in interim_keywords.keys():
+                    # for interims, 'Zinc':[] ,{'Reading': 4.0, 'Factor': 1.0}
                     interimKeyword = interim_keywords.get(sample_service)
                     successfully_parsed = {}
-                    successfully_parsed[interimKeyword] = results.get(sample_service)
-                    successfully_parsed.update({"DefaultResult": interimKeyword})
-                    self._addRawResult(sample_id, {sample_service: successfully_parsed})
+                    successfully_parsed[interimKeyword] = results.get(
+                                                            sample_service)
+                    successfully_parsed.update(
+                                            {"DefaultResult": interimKeyword})
+                    self._addRawResult(
+                            sample_id, {sample_service: successfully_parsed})
                     continue
                 else:
                     continue
@@ -176,62 +202,65 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             self._addRawResult(sample_id, {keyword: successfully_parsed})
         return 0
 
-    def get_results_values(self,row,row_nr,headers):
-        barcode_ct = row[12] #sample ID for other sample types M
-        barcode_boiler = row[77] #Sample ID for boiler water BZ
+    def get_results_values(self, row, row_nr, headers):
+        barcode_ct = row[12]  # sample ID for other sample types M
+        barcode_boiler = row[77]  # Sample ID for boiler water BZ
         if barcode_ct:
-            results = {} #ignore W and X,Y,AC
+            results = {}  # ignore W and X,Y,AC
             sample_id = barcode_ct
-            results[headers[14]] = row[14] #O
-            results[headers[15]] = row[15] #P 
-            results[headers[16]] = row[16] #Q
-            results[headers[17]] = row[17] #R 
-            results[headers[18]] = row[18] #S 
-            results[headers[19]] = row[19] #T
-            results[headers[20]] = row[20] #U
-            results[headers[21]] = row[21] #V
-            results[headers[25]] = row[25] #Z
-            results[headers[26]] = row[26] #AA
-            results[headers[27]] = row[27] #AB
+            results[headers[14]] = row[14]  # O
+            results[headers[15]] = row[15]  # P
+            results[headers[16]] = row[16]  # Q
+            results[headers[17]] = row[17]  # R
+            results[headers[18]] = row[18]  # S
+            results[headers[19]] = row[19]  # T
+            results[headers[20]] = row[20]  # U
+            results[headers[21]] = row[21]  # V
+            results[headers[25]] = row[25]  # Z
+            results[headers[26]] = row[26]  # AA
+            results[headers[27]] = row[27]  # AB
         elif barcode_boiler:
             sample_id = barcode_boiler
             results = {}
-            results[headers[80]] = row[80] #CC
-            results[headers[81]] = row[81] #CD Still to be added to Bika
-            results[headers[82]] = row[82] #CE
+            results[headers[80]] = row[80]  # CC
+            results[headers[81]] = row[81]  # CD Still to be added to Bika
+            results[headers[82]] = row[82]  # CE
         else:
-            #regular sample results
+            # regular sample results
             no_id_results = {}
-            no_id_results[headers[14]] = row[14] #O
-            no_id_results[headers[15]] = row[15] #P 
-            no_id_results[headers[16]] = row[16] #Q
-            no_id_results[headers[17]] = row[17] #R 
-            no_id_results[headers[18]] = row[18] #S 
-            no_id_results[headers[19]] = row[19] #T
-            no_id_results[headers[20]] = row[20] #U
-            no_id_results[headers[21]] = row[21] #V
-            no_id_results[headers[24]] = row[24] #Y
-            no_id_results[headers[25]] = row[25] #Z
-            no_id_results[headers[26]] = row[26] #AA
-            no_id_results[headers[27]] = row[27] #AB
-            no_id_results[headers[28]] = row[28] #AC
-            #boiler sample results
-            no_id_results[headers[80]] = row[80] #CC
-            no_id_results[headers[81]] = row[81] #CD Still to be added to Bika
-            no_id_results[headers[82]] = row[82] #CE
+            no_id_results[headers[14]] = row[14]  # O
+            no_id_results[headers[15]] = row[15]  # P
+            no_id_results[headers[16]] = row[16]  # Q
+            no_id_results[headers[17]] = row[17]  # R
+            no_id_results[headers[18]] = row[18]  # S
+            no_id_results[headers[19]] = row[19]  # T
+            no_id_results[headers[20]] = row[20]  # U
+            no_id_results[headers[21]] = row[21]  # V
+            no_id_results[headers[24]] = row[24]  # Y
+            no_id_results[headers[25]] = row[25]  # Z
+            no_id_results[headers[26]] = row[26]  # AA
+            no_id_results[headers[27]] = row[27]  # AB
+            no_id_results[headers[28]] = row[28]  # AC
+            # boiler sample results
+            no_id_results[headers[80]] = row[80]  # CC
+            no_id_results[headers[81]] = row[81]  # CD yet to be added to Bika
+            no_id_results[headers[82]] = row[82]  # CE
             if any(no_id_results.values()):
-                self.warn(msg="No Sample ID was found for results on row '${r}'. Please capture results manually",
-                    mapping={'r': row_nr})
+                self.warn(
+                        msg="No Sample ID was found for results on row '${r}'."
+                            " Please capture results manually",
+                        mapping={'r': row_nr})
             results = no_id_results
             sample_id = 'None'
-        return results,sample_id
+        return results, sample_id
 
     @staticmethod
     def get_interim_fields(sample_id):
         bc = api.get_tool(CATALOG_ANALYSIS_REQUEST_LISTING)
         ar = bc(portal_type='AnalysisRequest', id=sample_id)
         if len(ar) == 0:
-            ar = bc(portal_type='AnalysisRequest', getClientSampleID=sample_id)
+            ar = bc(
+                portal_type='AnalysisRequest', getClientSampleID=sample_id)
         if len(ar) == 1:
             obj = ar[0].getObject()
             analyses = obj.getAnalyses(full_objects=True)
@@ -240,7 +269,8 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             for analysis_service in analyses:
                 if analysis_service.getInterimFields():
                     for field in analysis_service.getInterimFields():
-                        keywords[analysis_service.getKeyword()] = field.get('keyword') 
+                        keywords[analysis_service.getKeyword()] = field.get(
+                                                                    'keyword')
             return keywords
         return {}
 
@@ -254,7 +284,8 @@ class FulcrumAppParser(InstrumentResultsFileParser):
     def is_analysis_group_id(analysis_group_id):
         portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
         query = dict(
-            portal_type=portal_types, getReferenceAnalysesGroupID=analysis_group_id
+            portal_type=portal_types,
+            getReferenceAnalysesGroupID=analysis_group_id
         )
         brains = api.search(query, ANALYSIS_CATALOG)
         return True if brains else False
@@ -269,7 +300,7 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             pass
 
     @staticmethod
-    def get_duplicate_or_qc(analysis_id,sample_service,):
+    def get_duplicate_or_qc(analysis_id, sample_service,):
         portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
         query = dict(
             portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id
@@ -279,12 +310,16 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         if len(brains) < 1:
             msg = (" No sample found with ID {}".format(analysis_id))
             raise AnalysisNotFound(msg)
-        brains = [v for k, v in analyses.items() if k.startswith(sample_service)]
+        brains = [
+                v for k,
+                v in analyses.items() if k.startswith(sample_service)]
         if len(brains) < 1:
-            msg = (" No analysis found matching Keyword {}".format(sample_service))
+            msg = (" No analysis found matching Keyword {}".format(
+                                                        sample_service))
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
-            msg = ("Multiple brains found matching Keyword {}".format(sample_service))
+            msg = ("Multiple brains found matching Keyword {}".format(
+                                                        sample_service))
             raise MultipleAnalysesFound(msg)
         return brains[0]
 
@@ -295,7 +330,8 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         )
         brains = api.search(query, SENAITE_CATALOG)
         if len(brains) < 1:
-            msg = ("No reference sample found with ID {}".format(reference_sample_id))
+            msg = ("No reference sample found with ID {}".format(
+                                                        reference_sample_id))
             raise AnalysisNotFound(msg)
         brains = [v for k, v in brains.items() if k == kw]
         if len(brains) < 1:
@@ -310,7 +346,7 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         kw = kw
         brains = self.get_reference_sample_analyses(reference_sample)
         if len(brains) < 1:
-            msg = ("No sample found with ID {}".format(reference_sample)) 
+            msg = ("No sample found with ID {}".format(reference_sample))
             raise AnalysisNotFound(msg)
         brains = [v for k, v in brains.items() if k == kw]
         if len(brains) < 1:
@@ -349,7 +385,7 @@ class FulcrumAppParser(InstrumentResultsFileParser):
     def extract_relevant_data(lines):
         new_lines = []
         for row in lines:
-            split_row = row.encode("ascii","ignore").split(",")
+            split_row = row.encode("ascii", "ignore").split(", ")
             new_lines.append(split_row)
         return new_lines
 
@@ -360,7 +396,7 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             return data.decode('utf-8')
         except UnicodeDecodeError:
             return None
-    
+
     @staticmethod
     def try_utf16(data):
         """Returns a Unicode object on success, or None on failure"""
@@ -404,9 +440,10 @@ class fulcrumappimport(object):
                 over = [True, False]
             elif override == "overrideempty":
                 over = [True, True]
-            analysis_states = ["unassigned","assigned","registered","to_be_verified"]
-            # ["unassigned","assigned","to_be_verified","rejected","retracted","verified","published","registered"] all of them
-
+            analysis_states = [
+                    "unassigned", "assigned", "registered", "to_be_verified"]
+            # ["unassigned","assigned","to_be_verified","rejected",
+            # "retracted","verified","published","registered"] all of them
 
             importer = AnalysisResultsImporter(
                 parser=parser,

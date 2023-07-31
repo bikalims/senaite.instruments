@@ -51,6 +51,7 @@ from zope.publisher.browser import FileUpload
 from zope.component import getUtility
 from plone.i18n.normalizer.interfaces import IIDNormalizer
 
+
 class SampleNotFound(Exception):
     pass
 
@@ -126,9 +127,11 @@ class FlameAtomicParser(InstrumentResultsFileParser):
                     new_val = '{}%'.format(cell.value * 100)
                 cellval = new_val if new_val else cell.value
                 if (isinstance(cellval, (int, long, float))):
-                    value = "" if cellval is None else str(cellval).encode("utf8")
+                    value = "" if cellval is None else str(cellval).encode(
+                                    "utf8")
                 else:
-                    value = "" if cellval is None else cellval.encode("utf8")
+                    value = "" if cellval is None else cellval.encode(
+                                    "utf8")
                 if "\n" in value:
                     value = value.split("\n")[0]
                 line.append(value.strip())
@@ -137,7 +140,6 @@ class FlameAtomicParser(InstrumentResultsFileParser):
             buffer.write(delimiter.join(line) + "\n")
         buffer.seek(0)
         return buffer
-
 
     def parse(self):
         order = []
@@ -158,7 +160,8 @@ class FlameAtomicParser(InstrumentResultsFileParser):
                     )
                     break
                 except SheetNotFound:
-                    self.err("Sheet not found in workbook: %s" % self.worksheet)
+                    self.err(
+                        "Sheet not found in workbook: %s" % self.worksheet)
                     return -1
                 except Exception as e:
                     pass
@@ -170,54 +173,63 @@ class FlameAtomicParser(InstrumentResultsFileParser):
         self.csv_data = FileUpload(stub)
 
         data = self.csv_data.read()
-        lines = self.data_cleaning(data,ext)
-        
+        lines = self.data_cleaning(data, ext)
+
         analysis_round = 0
         sample_service, lines = self.parse_headerlines(lines)
 
-        for row_nr,row in enumerate(lines):
+        for row_nr, row in enumerate(lines):
             if 'Mthode:' in row[0]:
                 analysis_round = analysis_round + 1
             elif analysis_round > 0 and row[0]:
 
-                self.parse_row(row,sample_service[analysis_round-1],analysis_round,row_nr)
+                self.parse_row(
+                    row, sample_service[analysis_round-1],
+                    analysis_round, row_nr)
         return 0
 
-
-    def parse_row(self, row,sample_service,analysis_round,row_nr):
+    def parse_row(self, row, sample_service, analysis_round, row_nr):
         try:
             row[8] = float(row[8])
-        except (TypeError,ValueError):
+        except (TypeError, ValueError):
             row[8] = 1
-        row[0] = row[0].replace(" ","")
+        row[0] = row[0].replace(" ", "")
 
         sample_ID = row[0]
         reading = row[1]
 
         if not sample_ID or not reading:
-            self.warn("Data not entered correctly for '{}' with sample ID '{}' and result of '{}'".format(sample_service,sample_ID,reading))
+            self.warn(
+                "Data not entered correctly for '{}' with sample ID '{}'"
+                " and result of '{}'".format(sample_service,
+                                             sample_ID, reading))
             return 0
 
-        #Here we check whether this sample ID has been processed already
-        if {sample_ID:sample_service} in self.processed_samples_class:
-            msg = ("Multiple results for Sample '{}' with sample service '{}' found. Not imported".format(sample_ID,sample_service))
+        # Here we check whether this sample ID has been processed already
+        if {sample_ID: sample_service} in self.processed_samples_class:
+            msg = (
+                "Multiple results for Sample '{}' with sample service '{}'"
+                " found. Not imported".format(sample_ID, sample_service))
             raise MultipleAnalysesFound(msg)
         try:
             if self.is_sample(sample_ID):
                 ar = self.get_ar(sample_ID)
-                analysis = self.get_analysis(ar,sample_service)
+                analysis = self.get_analysis(ar, sample_service)
                 keyword = analysis.getKeyword
             elif self.is_analysis_group_id(sample_ID):
-                analysis = self.get_duplicate_or_qc(sample_ID,sample_service)
+                analysis = self.get_duplicate_or_qc(sample_ID, sample_service)
                 keyword = analysis.getKeyword
             else:
-                sample_reference = self.get_reference_sample(sample_ID, sample_service)
-                analysis = self.get_reference_sample_analysis(sample_reference, sample_service)
+                sample_reference = self.get_reference_sample(
+                        sample_ID, sample_service)
+                analysis = self.get_reference_sample_analysis(
+                        sample_reference, sample_service)
                 keyword = analysis.getKeyword()
         except Exception as e:
-            self.warn(msg="Error getting analysis for '${s}/${kw}': ${e}",
-                      mapping={'s': sample_ID, 'kw': sample_service, 'e': repr(e)},
-                      numline=row_nr, line=str(row))
+            self.warn(
+                msg="Error getting analysis for '${s}/${kw}': ${e}",
+                mapping={'s': sample_ID, 'kw': sample_service, 'e': repr(e)},
+                numline=row_nr, line=str(row))
             return
 
         if reading == "OVER":
@@ -225,26 +237,25 @@ class FlameAtomicParser(InstrumentResultsFileParser):
                 reading = 999999
             else:
                 return
-        self.processed_samples_class.append({sample_ID:sample_service})
-        self.parse_results(float(reading),keyword,sample_ID)
+        self.processed_samples_class.append({sample_ID: sample_service})
+        self.parse_results(float(reading), keyword, sample_ID)
         return
 
-    def parse_results(self,result,keyword,sample_ID):
+    def parse_results(self, result, keyword, sample_ID):
         parsed = {}
         parsed["Reading"] = float(result)
         parsed.update({"DefaultResult": "Reading"})
         self._addRawResult(sample_ID, {keyword: parsed})
 
-
     @staticmethod
     def extract_relevant_data(lines):
         new_lines = []
         for row in lines:
-            split_row = row.encode("ascii","ignore").split(",")
+            split_row = row.encode("ascii", "ignore").split(",")
             new_lines.append(split_row)
         return new_lines
 
-    def data_cleaning(self,data,ext):
+    def data_cleaning(self, data, ext):
         decoded_data = self.try_utf8(data)
         if decoded_data:
             if ext == ".xlsx":
@@ -255,17 +266,23 @@ class FlameAtomicParser(InstrumentResultsFileParser):
             decoded_data = self.try_utf16(data)
             if decoded_data:
                 if "\r\n" in decoded_data:
-                    lines_with_parentheses = data.decode('utf-16').split("\r\n")
+                    lines_with_parentheses = data.decode(
+                                                'utf-16').split("\r\n")
                 elif "\n" in decoded_data:
-                    lines_with_parentheses = data.decode('utf-16').split("\n")
+                    lines_with_parentheses = data.decode(
+                                                'utf-16').split("\n")
                 else:
-                    lines_with_parentheses = re.sub(r'[^\x00-\x7f]',r'', data).split("\r\n") #if bad conversion
+                    lines_with_parentheses = re.sub(
+                            r'[^\x00-\x7f]',
+                            r'', data).split("\r\n")  # if bad conversion
             else:
                 if "\r\n" in data:
-                    lines_with_parentheses = re.sub(r'[^\x00-\x7f]',r'', data).split("\r\n")
+                    lines_with_parentheses = re.sub(
+                            r'[^\x00-\x7f]', r'', data).split("\r\n")
                 else:
-                    lines_with_parentheses = re.sub(r'[^\x00-\x7f]',r'', data).split("\n")
-        lines = [i.replace('"','') for i in lines_with_parentheses]
+                    lines_with_parentheses = re.sub(
+                            r'[^\x00-\x7f]', r'', data).split("\n")
+        lines = [i.replace('"', '') for i in lines_with_parentheses]
 
         ascii_lines = self.extract_relevant_data(lines)
         return ascii_lines
@@ -273,18 +290,17 @@ class FlameAtomicParser(InstrumentResultsFileParser):
     @staticmethod
     def parse_headerlines(lines):
         sample_service = []
-        for row_nr,row in enumerate(lines):
+        for row_nr, row in enumerate(lines):
             if row_nr == 5:
-                return sample_service,lines[5:]
+                return sample_service, lines[5:]
             if 'Mthodes' in row[0]:
-                #Here we determine how many rounds there are in the sheet (Max = 3)
+                # Determining how many rounds there are in the sheet (Max = 3)
                 if row[1]:
                     sample_service.append(row[1])
                 if len(row) > 2 and row[2]:
                     sample_service.append(row[2])
                 if len(row) > 3 and row[3]:
                     sample_service.append(row[3])
-
 
     @staticmethod
     def try_utf8(data):
@@ -294,7 +310,6 @@ class FlameAtomicParser(InstrumentResultsFileParser):
         except UnicodeDecodeError:
             return None
 
-
     @staticmethod
     def try_utf16(data):
         """Returns a Unicode object on success, or None on failure"""
@@ -303,13 +318,11 @@ class FlameAtomicParser(InstrumentResultsFileParser):
         except UnicodeDecodeError:
             return None
 
-
     @staticmethod
     def is_sample(sample_id):
         query = dict(portal_type="AnalysisRequest", getId=sample_id)
         brains = api.search(query, CATALOG_ANALYSIS_REQUEST_LISTING)
         return True if brains else False
-
 
     @staticmethod
     def get_ar(sample_id):
@@ -319,7 +332,6 @@ class FlameAtomicParser(InstrumentResultsFileParser):
             return api.get_object(brains[0])
         except IndexError:
             pass
-
 
     def get_analysis(self, ar, kw):
         analyses = self.get_analyses(ar)
@@ -332,40 +344,42 @@ class FlameAtomicParser(InstrumentResultsFileParser):
             return None
         return analyses[0]
 
-
     @staticmethod
     def get_analyses(ar):
         analyses = ar.getAnalyses()
         return dict((a.getKeyword, a) for a in analyses)
 
-
     @staticmethod
     def is_analysis_group_id(analysis_group_id):
         portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
         query = dict(
-            portal_type=portal_types, getReferenceAnalysesGroupID=analysis_group_id
+            portal_type=portal_types,
+            getReferenceAnalysesGroupID=analysis_group_id
         )
         brains = api.search(query, ANALYSIS_CATALOG)
         return True if brains else False
-    
 
     @staticmethod
-    def get_duplicate_or_qc(analysis_id,sample_service,):
+    def get_duplicate_or_qc(analysis_id, sample_service, ):
         portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
         query = dict(
             portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id
         )
         brains = api.search(query, ANALYSIS_CATALOG)
         analyses = dict((a.getKeyword, a) for a in brains)
-        brains = [v for k, v in analyses.items() if k.startswith(sample_service)]
+        brains = [
+                v for k, v in analyses.items() if k.startswith(sample_service)]
         if len(brains) < 1:
-            msg = (" No analysis found matching Keyword {}".format(sample_service))
+            msg = (
+                " No analysis found matching Keyword {}".format(
+                                                            sample_service))
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
-            msg = ("Multiple brains found matching Keyword {}".format(sample_service))
+            msg = (
+                "Multiple brains found matching Keyword {}".format(
+                                                            sample_service))
             raise MultipleAnalysesFound(msg)
         return brains[0]
-
 
     @staticmethod
     def get_reference_sample(reference_sample_id, kw):
@@ -381,12 +395,10 @@ class FlameAtomicParser(InstrumentResultsFileParser):
             raise MultipleAnalysesFound(msg)
         return brains[0]
 
-
     @staticmethod
     def get_reference_sample_analyses(reference_sample):
         brains = reference_sample.getObject().getReferenceAnalyses()
         return dict((a.getKeyword(), a) for a in brains)
-
 
     def get_reference_sample_analysis(self, reference_sample, kw):
         kw = kw
@@ -399,7 +411,7 @@ class FlameAtomicParser(InstrumentResultsFileParser):
             msg = ("Multiple brains found matching Keyword {}".format(kw))
             raise MultipleAnalysesFound(msg)
         return brains[0]
-    
+
 
 class flameatomicimport(object):
     implements(IInstrumentImportInterface, IInstrumentAutoImportInterface)
@@ -431,7 +443,8 @@ class flameatomicimport(object):
             if artoapply == "received":
                 status = ["sample_received"]
             elif artoapply == "received_tobeverified":
-                status = ["sample_received", "attachment_due", "to_be_verified"]
+                status = [
+                        "sample_received", "attachment_due", "to_be_verified"]
 
             over = [False, False]
             if override == "nooverride":
@@ -465,12 +478,11 @@ class flameatomicimport(object):
 
 class MyExport(BrowserView):
 
-    def __innit__(self,context,request):
+    def __innit__(self, context, request):
         self.context = context
         self.request = request
-    
 
-    def __call__(self,analyses):
+    def __call__(self, analyses):
         now = DateTime().strftime('%Y%m%d-%H%M')
         uc = api.get_tool('uid_catalog')
         instrument = self.context.getInstrument()
@@ -485,14 +497,14 @@ class MyExport(BrowserView):
             'notneeded2': 1,
             'notneeded3': 10
         }
-        
-        sample_cases = {'a':'SAMP','b':'BLANK','c':'CRM','d':'DUP'}
+
+        sample_cases = {'a': 'SAMP', 'b': 'BLANK', 'c': 'CRM', 'd': 'DUP'}
 
         layout = self.context.getLayout()
         tmprows = []
         sample_dict = {}
 
-        for indx,item in enumerate(layout):
+        for indx, item in enumerate(layout):
             c_uid = item['container_uid']
             a_uid = item['analysis_uid']
             analysis = uc(UID=a_uid)[0].getObject() if a_uid else None
@@ -523,7 +535,7 @@ class MyExport(BrowserView):
                             options["notneeded1"],
                             options["notneeded2"],
                             options["notneeded3"]])
-        
+
         for row in tmprows:
             if sample_dict.get(row[1]):
                 sample_dict[row[1]].append(row)
@@ -538,7 +550,7 @@ class MyExport(BrowserView):
                     max_weight = items[3]
             rows[0][3] = max_weight
             unsorted_rows.append(rows[0])
-            
+
         unsorted_rows.sort(lambda a, b: cmp(a[0], b[0]))
         final_rows = self.row_sorter(unsorted_rows)
         result = self.dict_to_string(final_rows)
@@ -548,23 +560,21 @@ class MyExport(BrowserView):
         setheader('Content-Disposition', 'attachment; filename=%s' % filename)
         setheader('Content-Type', 'text/lbl')
         self.request.RESPONSE.write(result)
-    
 
     @staticmethod
     def dict_to_string(rows):
         final_rows = ''
         interim_rows = []
-        
+
         for row in rows:
             row = ','.join(str(item) for item in row)
             interim_rows.append(row)
         final_rows = '\r\n'.join(interim_rows)
         return final_rows
 
-    
     @staticmethod
     def row_sorter(rows):
-        for indx,row in enumerate(rows):
+        for indx, row in enumerate(rows):
             row[0] = indx+1
         return rows
 
@@ -574,11 +584,9 @@ class flameatomicexport(object):
     title = "Agilent Flame Atomic Exporter"
     __file__ = abspath(__file__)  # noqa
 
-
-    def __init__(self, context,request=None):
+    def __init__(self, context, request=None):
         self.context = context
         self.request = request
 
-
     def Export(self, context, request):
-        return MyExport(context,request)
+        return MyExport(context, request)
