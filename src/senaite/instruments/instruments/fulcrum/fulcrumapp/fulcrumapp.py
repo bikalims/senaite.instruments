@@ -47,8 +47,6 @@ from senaite.instruments.instrument import SheetNotFound
 from zope.interface import implements
 from zope.publisher.browser import FileUpload
 
-field_interim_map = {"Dilution": "Factor", "Result": "Reading"}
-
 
 class SampleNotFound(Exception):
     pass
@@ -62,7 +60,7 @@ class AnalysisNotFound(Exception):
     pass
 
 
-class DR3900Parser(InstrumentResultsFileParser):
+class FulcrumAppParser(InstrumentResultsFileParser):
     ar = None
 
     def __init__(self, infile, worksheet=None, encoding=None, delimiter=None):
@@ -110,12 +108,20 @@ class DR3900Parser(InstrumentResultsFileParser):
         self.csv_data = FileUpload(stub)
         data = self.csv_data.read()
 
+        lines_with_parentheses = self.use_correct_unicode_tranformation_format(
+                                                            data, ext)
+        lines = [i.replace('"', '') for i in lines_with_parentheses]
+        ascii_lines = self.extract_relevant_data(lines)
+        headers = ascii_lines[0]
+        for row_nr, row in enumerate(ascii_lines):
+            if row_nr != 0 and len(row) > 1:
+                self.parse_row(row, row_nr, headers)
+        return 0
+
+    def use_correct_unicode_tranformation_format(self, data, ext):
         decoded_data = self.try_utf8(data)
         if decoded_data:
-            if ext == ".xlsx":
-                lines_with_parentheses = decoded_data.split("\n")
-            else:
-                lines_with_parentheses = decoded_data.split("\r\n")
+            lines_with_parentheses = decoded_data.split("\n")
         else:
             decoded_data = self.try_utf16(data)
             if decoded_data:
@@ -127,82 +133,146 @@ class DR3900Parser(InstrumentResultsFileParser):
                                                 'utf-16').split("\n")
                 else:
                     lines_with_parentheses = re.sub(
-                                        r'[^\x00-\x7f]',
-                                        r'',
-                                        data).split(
-                                                "\r\n")  # if bad conversion
+                                r'[^\x00-\x7f]',
+                                r'',
+                                data).split("\r\n")  # if bad conversion
             else:
                 if "\r\n" in data:
                     lines_with_parentheses = re.sub(
-                                        r'[^\x00-\x7f]',
-                                        r'',
-                                        data).split("\r\n")
+                                r'[^\x00-\x7f]',
+                                r'',
+                                data).split("\r\n")
                 else:
                     lines_with_parentheses = re.sub(
-                                        r'[^\x00-\x7f]',
-                                        r'',
-                                        data).split("\n")
-        lines = [i.replace('"', '') for i in lines_with_parentheses]
+                                r'[^\x00-\x7f]',
+                                r'',
+                                data).split("\n")
+        return lines_with_parentheses
 
-        ascii_lines = self.extract_relevant_data(lines)
-        reader = csv.DictReader(ascii_lines)
-
-        headers_parsed = self.parse_headerlines(reader)
-
-        if headers_parsed:
-            for row in reader:
-                self.parse_row(row, reader.line_num)
-        return 0
-
-    def parse_row(self, row, row_nr):
-        parsed_strings = {}
-        parsed_strings = self.interim_map_sorter(row)
-        parsed = self.data_cleaning(parsed_strings)
-        sample_ID = row.get("Sample ID:")
-        regex = re.compile('[^a-zA-Z]')
-        sample_service = regex.sub('', row.get("Parameter:"))
-
-        if not sample_service or not sample_ID or not row.get(
-                                                "Result").strip(" "):
-            self.warn(
-                    "Data not entered correctly for '{}'"
-                    " with sample ID '{}' and result of '{}'".format(
-                            sample_service, sample_ID, row.get("Result")))
-            return 0
-
-        if {sample_ID: sample_service} in self.processed_samples:
-            msg = (
-                    "Multiple results for Sample '{}' with sample service"
-                    " '{}' found. Not imported".format(
-                                        sample_ID, sample_service))
-            raise MultipleAnalysesFound(msg)
-
-        try:
-            if self.is_sample(sample_ID):
-                ar = self.get_ar(sample_ID)
-                analysis = self.get_analysis(ar, sample_service)
-                keyword = analysis.getKeyword
-            elif self.is_analysis_group_id(sample_ID):
-                analysis = self.get_duplicate_or_qc(sample_ID, sample_service)
-                keyword = analysis.getKeyword
-            else:
-                sample_reference = self.get_reference_sample(
-                                            sample_ID, sample_service)
-                analysis = self.get_reference_sample_analysis(
-                                            sample_reference, sample_service)
-                keyword = analysis.getKeyword()
-        except Exception as e:
-            self.warn(msg="Error getting analysis for '${s}/${kw}': ${e}",
-                      mapping={
-                          's': sample_ID,
-                          'kw': sample_service,
-                          'e': repr(e)},
-                      numline=row_nr, line=str(row))
+    def parse_row(self, row, row_nr, headers):
+        results, sample_id = self.get_results_values(row, row_nr, headers)
+        if sample_id == 'None':
             return
-        self.processed_samples.append({sample_ID: sample_service})
-        parsed.update({"DefaultResult": "Reading"})
-        self._addRawResult(sample_ID, {keyword: parsed})
+        interim_keywords = self.get_interim_fields(sample_id)
+
+        for sample_service in results.keys():
+            if results.get(sample_service):
+                try:
+                    if self.is_sample(sample_id):
+                        ar = self.get_ar(sample_id)
+                        analysis = self.get_analysis(ar, sample_service)
+                        keyword = analysis.getKeyword
+                    elif self.is_analysis_group_id(sample_id):
+                        analysis = self.get_duplicate_or_qc(
+                                            sample_id, sample_service)
+                        keyword = analysis.getKeyword
+                    else:
+                        sample_reference = self.get_reference_sample(
+                                            sample_id, sample_service)
+                        analysis = self.get_reference_sample_analysis(
+                                            sample_reference, sample_service)
+                        keyword = analysis.getKeyword()
+                except Exception as e:
+                    self.warn(
+                            msg="Error getting analysis for"
+                                " '${s}/${kw}': ${e}",
+                            mapping={
+                                's': sample_id,
+                                'kw': sample_service,
+                                'e': repr(e)},
+                            numline=row_nr)
+                    continue
+            else:
+                if sample_service in interim_keywords.keys():
+                    # for interims, 'Zinc':[] ,{'Reading': 4.0, 'Factor': 1.0}
+                    interimKeyword = interim_keywords.get(sample_service)
+                    successfully_parsed = {}
+                    successfully_parsed[interimKeyword] = results.get(
+                                                            sample_service)
+                    successfully_parsed.update(
+                                            {"DefaultResult": interimKeyword})
+                    self._addRawResult(
+                            sample_id, {sample_service: successfully_parsed})
+                    continue
+                else:
+                    continue
+            successfully_parsed = {}
+            successfully_parsed[sample_service] = results.get(sample_service)
+            successfully_parsed.update({"DefaultResult": sample_service})
+            self._addRawResult(sample_id, {keyword: successfully_parsed})
         return 0
+
+    def get_results_values(self, row, row_nr, headers):
+        barcode_ct = row[12]  # sample ID for other sample types M
+        barcode_boiler = row[77]  # Sample ID for boiler water BZ
+        if barcode_ct:
+            results = {}  # ignore W and X,Y,AC
+            sample_id = barcode_ct
+            results[headers[14]] = row[14]  # O
+            results[headers[15]] = row[15]  # P
+            results[headers[16]] = row[16]  # Q
+            results[headers[17]] = row[17]  # R
+            results[headers[18]] = row[18]  # S
+            results[headers[19]] = row[19]  # T
+            results[headers[20]] = row[20]  # U
+            results[headers[21]] = row[21]  # V
+            results[headers[25]] = row[25]  # Z
+            results[headers[26]] = row[26]  # AA
+            results[headers[27]] = row[27]  # AB
+        elif barcode_boiler:
+            sample_id = barcode_boiler
+            results = {}
+            results[headers[80]] = row[80]  # CC
+            results[headers[81]] = row[81]  # CD Still to be added to Bika
+            results[headers[82]] = row[82]  # CE
+        else:
+            # regular sample results
+            no_id_results = {}
+            no_id_results[headers[14]] = row[14]  # O
+            no_id_results[headers[15]] = row[15]  # P
+            no_id_results[headers[16]] = row[16]  # Q
+            no_id_results[headers[17]] = row[17]  # R
+            no_id_results[headers[18]] = row[18]  # S
+            no_id_results[headers[19]] = row[19]  # T
+            no_id_results[headers[20]] = row[20]  # U
+            no_id_results[headers[21]] = row[21]  # V
+            no_id_results[headers[24]] = row[24]  # Y
+            no_id_results[headers[25]] = row[25]  # Z
+            no_id_results[headers[26]] = row[26]  # AA
+            no_id_results[headers[27]] = row[27]  # AB
+            no_id_results[headers[28]] = row[28]  # AC
+            # boiler sample results
+            no_id_results[headers[80]] = row[80]  # CC
+            no_id_results[headers[81]] = row[81]  # CD yet to be added to Bika
+            no_id_results[headers[82]] = row[82]  # CE
+            if any(no_id_results.values()):
+                self.warn(
+                        msg="No Sample ID was found for results on row '${r}'."
+                            " Please capture results manually",
+                        mapping={'r': row_nr})
+            results = no_id_results
+            sample_id = 'None'
+        return results, sample_id
+
+    @staticmethod
+    def get_interim_fields(sample_id):
+        bc = api.get_tool(CATALOG_ANALYSIS_REQUEST_LISTING)
+        ar = bc(portal_type='AnalysisRequest', id=sample_id)
+        if len(ar) == 0:
+            ar = bc(
+                portal_type='AnalysisRequest', getClientSampleID=sample_id)
+        if len(ar) == 1:
+            obj = ar[0].getObject()
+            analyses = obj.getAnalyses(full_objects=True)
+            services_with_interims = {}
+            keywords = {}
+            for analysis_service in analyses:
+                if analysis_service.getInterimFields():
+                    for field in analysis_service.getInterimFields():
+                        keywords[analysis_service.getKeyword()] = field.get(
+                                                                    'keyword')
+            return keywords
+        return {}
 
     @staticmethod
     def is_sample(sample_id):
@@ -230,7 +300,7 @@ class DR3900Parser(InstrumentResultsFileParser):
             pass
 
     @staticmethod
-    def get_duplicate_or_qc(analysis_id, sample_service, ):
+    def get_duplicate_or_qc(analysis_id, sample_service,):
         portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
         query = dict(
             portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id
@@ -244,13 +314,11 @@ class DR3900Parser(InstrumentResultsFileParser):
                 v for k,
                 v in analyses.items() if k.startswith(sample_service)]
         if len(brains) < 1:
-            msg = (
-                " No analysis found matching Keyword {}".format(
+            msg = (" No analysis found matching Keyword {}".format(
                                                         sample_service))
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
-            msg = (
-                "Multiple brains found matching Keyword {}".format(
+            msg = ("Multiple brains found matching Keyword {}".format(
                                                         sample_service))
             raise MultipleAnalysesFound(msg)
         return brains[0]
@@ -262,8 +330,7 @@ class DR3900Parser(InstrumentResultsFileParser):
         )
         brains = api.search(query, SENAITE_CATALOG)
         if len(brains) < 1:
-            msg = (
-                "No reference sample found with ID {}".format(
+            msg = ("No reference sample found with ID {}".format(
                                                         reference_sample_id))
             raise AnalysisNotFound(msg)
         brains = [v for k, v in brains.items() if k == kw]
@@ -318,9 +385,8 @@ class DR3900Parser(InstrumentResultsFileParser):
     def extract_relevant_data(lines):
         new_lines = []
         for row in lines:
-            split_row = row.encode("ascii", "ignore").split(",")
-            if len(split_row) > 13:
-                new_lines.append(','.join([str(elem) for elem in split_row]))
+            split_row = row.encode("ascii", "ignore").split(", ")
+            new_lines.append(split_row)
         return new_lines
 
     @staticmethod
@@ -339,37 +405,10 @@ class DR3900Parser(InstrumentResultsFileParser):
         except UnicodeDecodeError:
             return None
 
-    @staticmethod
-    def parse_headerlines(reader):
-        "To be implemented if necessary"
-        return True
 
-    @staticmethod
-    def interim_map_sorter(row):
-        interims = {}
-        for k, v in row.items():
-            sub = field_interim_map.get(k, '')
-            if sub != '':
-                interims[sub] = v
-        return interims
-
-    @staticmethod
-    def data_cleaning(parsed):
-        for k, v in parsed.items():
-            # Sometimes a Factor value is not included in sheet
-            if k == "Factor" and not v:
-                parsed[k] = 1
-            else:
-                try:
-                    parsed[k] = float(v)
-                except (TypeError, ValueError):
-                    parsed[k] = v
-        return parsed
-
-
-class dr3900import(object):
+class fulcrumappimport(object):
     implements(IInstrumentImportInterface, IInstrumentAutoImportInterface)
-    title = "Hach DR3900"
+    title = "FulcrumApp"
     __file__ = abspath(__file__)
 
     def __init__(self, context):
@@ -383,7 +422,6 @@ class dr3900import(object):
         warns = []
 
         infile = request.form["instrument_results_file"]
-        artoapply = request.form["artoapply"]
         override = request.form["results_override"]
         instrument = request.form.get("instrument", None)
         worksheet = request.form.get("worksheet", 0)
@@ -392,17 +430,9 @@ class dr3900import(object):
         if not hasattr(infile, "filename"):
             errors.append(_("No file selected"))
 
-        parser = DR3900Parser(infile, worksheet=worksheet)
-
+        parser = FulcrumAppParser(infile, worksheet=worksheet)
         if parser:
-
-            status = ["sample_received", "attachment_due", "to_be_verified"]
-            if artoapply == "received":
-                status = ["sample_received"]
-            elif artoapply == "received_tobeverified":
-                status = [
-                    "sample_received", "attachment_due", "to_be_verified"]
-
+            status = ["sample_received", "sample_due", "to_be_sampled"]
             over = [False, False]
             if override == "nooverride":
                 over = [False, False]
@@ -410,12 +440,16 @@ class dr3900import(object):
                 over = [True, False]
             elif override == "overrideempty":
                 over = [True, True]
+            analysis_states = [
+                    "unassigned", "assigned", "registered", "to_be_verified"]
+            # ["unassigned","assigned","to_be_verified","rejected",
+            # "retracted","verified","published","registered"] all of them
 
             importer = AnalysisResultsImporter(
                 parser=parser,
                 context=context,
                 allowed_ar_states=status,
-                allowed_analysis_states=None,
+                allowed_analysis_states=analysis_states,
                 override=over,
                 instrument_uid=instrument,
             )
@@ -431,83 +465,3 @@ class dr3900import(object):
         results = {"errors": errors, "log": logs, "warns": warns}
 
         return json.dumps(results)
-
-
-class MyExport(BrowserView):
-
-    def __innit__(self, context, request):
-        self.context = context
-        self.request = request
-
-    def __call__(self, analyses):
-        uc = api.get_tool('uid_catalog')
-        instrument = self.context.getInstrument()
-        filename = '{}-{}.csv'.format(
-            self.context.getId(), instrument.Title())
-        now = DateTime().strftime('%m/%d/%Y')
-
-        layout = self.context.getLayout()
-        tmprows = []
-        parsed_analyses = {}
-        headers = ["#Sample Number", "#ID", "#Date", "#LIMS ID"]
-        tmprows.append(headers)
-        rows = []
-
-        for indx, item in enumerate(layout):
-            c_uid = item['container_uid']
-            a_uid = item['analysis_uid']
-            analysis = uc(UID=a_uid)[0].getObject() if a_uid else None
-            container = uc(UID=c_uid)[0].getObject() if c_uid else None
-
-            if item['type'] == 'a':
-                analysis_id = container.id
-            elif (item['type'] in 'bcd'):
-                analysis_id = analysis.getReferenceAnalysesGroupID()
-            if parsed_analyses.get(analysis_id):
-                continue
-            else:
-                tmprows.append([indx+1,
-                                analysis_id,
-                                now,
-                                ''])
-                parsed_analyses[analysis_id] = 10
-
-        rows = self.row_sorter(tmprows)
-        result = self.dict_to_string(rows)
-
-        setheader = self.request.RESPONSE.setHeader
-        setheader('Content-Length', len(result))
-        setheader('Content-Disposition', 'inline; filename=%s' % filename)
-        setheader('Content-Type', 'text/csv')
-        self.request.RESPONSE.write(result)
-
-    @staticmethod
-    def dict_to_string(rows):
-        final_rows = ''
-        interim_rows = []
-
-        for row in rows:
-            row = ','.join(str(item) for item in row)
-            interim_rows.append(row)
-        final_rows = '\r\n'.join(interim_rows)
-        return final_rows
-
-    @staticmethod
-    def row_sorter(rows):
-        for indx, row in enumerate(rows):
-            if indx != 0:
-                row[0] = indx
-        return rows
-
-
-class dr3900export(object):
-    implements(IInstrumentExportInterface)
-    title = "Hach DR3900 Exporter"
-    __file__ = abspath(__file__)  # noqa
-
-    def __init__(self, context, request=None):
-        self.context = context
-        self.request = request
-
-    def Export(self, context, request):
-        return MyExport(context, request)

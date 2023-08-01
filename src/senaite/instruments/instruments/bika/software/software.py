@@ -24,13 +24,10 @@ import traceback
 from mimetypes import guess_type
 from os.path import abspath
 from os.path import splitext
-from DateTime import DateTime
-from bika.lims.browser import BrowserView
 
 from senaite.core.exportimport.instruments import (
     IInstrumentAutoImportInterface, IInstrumentImportInterface
 )
-from senaite.core.exportimport.instruments import IInstrumentExportInterface
 from senaite.core.exportimport.instruments.resultsimport import (
     AnalysisResultsImporter)
 from senaite.core.exportimport.instruments.resultsimport import (
@@ -47,8 +44,6 @@ from senaite.instruments.instrument import SheetNotFound
 from zope.interface import implements
 from zope.publisher.browser import FileUpload
 
-field_interim_map = {"Dilution": "Factor", "Result": "Reading"}
-
 
 class SampleNotFound(Exception):
     pass
@@ -62,10 +57,12 @@ class AnalysisNotFound(Exception):
     pass
 
 
-class DR3900Parser(InstrumentResultsFileParser):
+class SoftwareParser(InstrumentResultsFileParser):
     ar = None
 
-    def __init__(self, infile, worksheet=None, encoding=None, delimiter=None):
+    def __init__(
+            self, infile, instrument, worksheet=None,
+            encoding=None, delimiter=None):
         self.delimiter = delimiter if delimiter else ","
         self.encoding = encoding
         self.ar = None
@@ -73,15 +70,16 @@ class DR3900Parser(InstrumentResultsFileParser):
         self.worksheet = worksheet if worksheet else 0
         self.infile = infile
         self.csv_data = None
+        self.csv_comments_data = None
         self.sample_id = None
-        self.processed_samples = []
+        self.instrument_uid = instrument
         mimetype, encoding = guess_type(self.infile.filename)
         InstrumentResultsFileParser.__init__(self, infile, mimetype)
 
     def parse(self):
         order = []
         ext = splitext(self.infile.filename.lower())[-1]
-        if ext == ".xlsx":  # fix in flameatomic also
+        if ext == ".xlsx":
             order = (xlsx_to_csv, xls_to_csv)
         elif ext == ".xls":
             order = (xls_to_csv, xlsx_to_csv)
@@ -95,6 +93,12 @@ class DR3900Parser(InstrumentResultsFileParser):
                         worksheet=self.worksheet,
                         delimiter=self.delimiter,
                     )
+                    self.infile.seek(0)
+                    self.csv_comments_data = importer(
+                        infile=self.infile,
+                        worksheet=1,
+                        delimiter=self.delimiter,
+                    )
                     break
                 except SheetNotFound:
                     self.err(
@@ -106,13 +110,49 @@ class DR3900Parser(InstrumentResultsFileParser):
                 self.warn("Can't parse input file as XLS, XLSX, or CSV.")
                 return -1
 
-        stub = FileStub(file=self.csv_data, name=str(self.infile.filename))
+        stub = FileStub(
+            file=self.csv_data, name=str(self.infile.filename))
+        comments_stub = FileStub(
+            file=self.csv_comments_data, name=str(self.infile.filename))
         self.csv_data = FileUpload(stub)
-        data = self.csv_data.read()
+        self.csv_comments_data = FileUpload(comments_stub)
 
+        comments_data = self.csv_comments_data.read()
+        data = self.csv_data.read()
+        lines = self.decode_read_data(data, ext)
+        comments_lines = self.decode_read_data(comments_data, ext)
+        sample_comments = self.comments_parser(comments_lines)
+        self.results_parser(lines, sample_comments)
+        return 0
+
+    def comments_parser(self, data):
+        sample_comments = {}
+        for row_num, row in enumerate(data):
+            if row_num > 6:
+                try:
+                    sample_comments.update({row[0]: row[1]})
+                except IndexError:
+                    pass
+        return sample_comments
+
+    def results_parser(self, data, comments):
+        for row_num, row in enumerate(data):
+            if row_num == 4:
+                sample_ids = row[1::2]
+                sample_ids.pop(0)
+                if not sample_ids[-1]:
+                    sample_ids.pop(-1)
+            if row_num > 7:
+                if any(row[1:]):  # checking if all row elements are non empty
+                    clean_row = row[::]
+                    clean_row.pop(1)
+                    clean_row.pop(1)
+                    self.parse_row(clean_row, row_num, sample_ids, comments)
+
+    def decode_read_data(self, data, ext):
         decoded_data = self.try_utf8(data)
         if decoded_data:
-            if ext == ".xlsx":
+            if ext == ".xlsx" or ext == ".xls":
                 lines_with_parentheses = decoded_data.split("\n")
             else:
                 lines_with_parentheses = decoded_data.split("\r\n")
@@ -121,88 +161,93 @@ class DR3900Parser(InstrumentResultsFileParser):
             if decoded_data:
                 if "\r\n" in decoded_data:
                     lines_with_parentheses = data.decode(
-                                                'utf-16').split("\r\n")
+                        'utf-16').split("\r\n")
                 elif "\n" in decoded_data:
                     lines_with_parentheses = data.decode(
-                                                'utf-16').split("\n")
+                        'utf-16').split("\n")
                 else:
+                    # if bad conversion
                     lines_with_parentheses = re.sub(
-                                        r'[^\x00-\x7f]',
-                                        r'',
-                                        data).split(
-                                                "\r\n")  # if bad conversion
+                        r'[^\x00-\x7f]', r'', data).split("\r\n")
             else:
                 if "\r\n" in data:
                     lines_with_parentheses = re.sub(
-                                        r'[^\x00-\x7f]',
-                                        r'',
-                                        data).split("\r\n")
+                        r'[^\x00-\x7f]', r'', data).split("\r\n")
                 else:
                     lines_with_parentheses = re.sub(
-                                        r'[^\x00-\x7f]',
-                                        r'',
-                                        data).split("\n")
+                        r'[^\x00-\x7f]', r'', data).split("\n")
         lines = [i.replace('"', '') for i in lines_with_parentheses]
-
         ascii_lines = self.extract_relevant_data(lines)
-        reader = csv.DictReader(ascii_lines)
+        return ascii_lines
 
-        headers_parsed = self.parse_headerlines(reader)
-
-        if headers_parsed:
-            for row in reader:
-                self.parse_row(row, reader.line_num)
+    def parse_row(self, row, row_nr, sample_ids, comments):
+        sample_service = row.pop(0)
+        for indx, sample_id in enumerate(sample_ids):
+            result = row[2*indx]
+            rl = row[(2*indx) + 1]
+            if not result:
+                continue
+            try:
+                if self.is_sample(sample_id):
+                    ar = self.get_ar(sample_id)
+                    analysis = self.get_analysis(ar, sample_service)
+                    keyword = analysis.getKeyword
+                elif self.is_analysis_group_id(sample_id):  # No QC's
+                    analysis = self.get_duplicate_or_qc(
+                        sample_id, sample_service)
+                    keyword = analysis.getKeyword
+                else:
+                    sample_reference = self.get_reference_sample(
+                        sample_id, sample_service)  # No QC's
+                    analysis = self.get_reference_sample_analysis(
+                        sample_reference, sample_service)
+                    keyword = analysis.getKeyword()
+            except Exception as e:
+                self.warn(msg="Error getting analysis for '${s}/${kw}': ${e}",
+                          mapping={
+                              's': sample_id,
+                              'kw': sample_service,
+                              'e': repr(e)},
+                          numline=row_nr, line=str(row))
+                return
+            if rl:
+                self.set_uncertainty(analysis, rl)
+            # Allow manual editing of uncertainty
+            # if comments.get(sample_id):
+                # self.set_sample_remarks(ar, comments.pop(sample_id))
+            result = self.result_detection_limit(result, analysis)
+            parsed_results = {'Reading': result}
+            parsed_results.update({"DefaultResult": "Reading"})
+            self._addRawResult(sample_id, {keyword: parsed_results})
         return 0
 
-    def parse_row(self, row, row_nr):
-        parsed_strings = {}
-        parsed_strings = self.interim_map_sorter(row)
-        parsed = self.data_cleaning(parsed_strings)
-        sample_ID = row.get("Sample ID:")
-        regex = re.compile('[^a-zA-Z]')
-        sample_service = regex.sub('', row.get("Parameter:"))
-
-        if not sample_service or not sample_ID or not row.get(
-                                                "Result").strip(" "):
-            self.warn(
-                    "Data not entered correctly for '{}'"
-                    " with sample ID '{}' and result of '{}'".format(
-                            sample_service, sample_ID, row.get("Result")))
-            return 0
-
-        if {sample_ID: sample_service} in self.processed_samples:
-            msg = (
-                    "Multiple results for Sample '{}' with sample service"
-                    " '{}' found. Not imported".format(
-                                        sample_ID, sample_service))
-            raise MultipleAnalysesFound(msg)
-
-        try:
-            if self.is_sample(sample_ID):
-                ar = self.get_ar(sample_ID)
-                analysis = self.get_analysis(ar, sample_service)
-                keyword = analysis.getKeyword
-            elif self.is_analysis_group_id(sample_ID):
-                analysis = self.get_duplicate_or_qc(sample_ID, sample_service)
-                keyword = analysis.getKeyword
+    def result_detection_limit(self, result, analysis):
+        if '<' not in result and '>' not in result:
+            return result
+        analysis_obj = analysis.getObject()
+        operand = result[0]
+        if operand == '<':
+            ldl = analysis_obj.getLowerDetectionLimit()
+            if ldl:
+                result = float(ldl) - 1
             else:
-                sample_reference = self.get_reference_sample(
-                                            sample_ID, sample_service)
-                analysis = self.get_reference_sample_analysis(
-                                            sample_reference, sample_service)
-                keyword = analysis.getKeyword()
-        except Exception as e:
-            self.warn(msg="Error getting analysis for '${s}/${kw}': ${e}",
-                      mapping={
-                          's': sample_ID,
-                          'kw': sample_service,
-                          'e': repr(e)},
-                      numline=row_nr, line=str(row))
-            return
-        self.processed_samples.append({sample_ID: sample_service})
-        parsed.update({"DefaultResult": "Reading"})
-        self._addRawResult(sample_ID, {keyword: parsed})
-        return 0
+                result = -1
+        elif operand == '>':
+            udl = analysis_obj.getUpperDetectionLimit()
+            if udl:
+                result = float(udl) + 1
+            else:
+                result = -1
+        return str(result)
+
+    def set_uncertainty(self, analysis, uncertainty_value):
+        analysis_obj = analysis.getObject()
+        analysis_obj.setUncertainty(uncertainty_value)
+
+    def set_sample_remarks(self, sample, remark):
+        instrument_obj = api.get_object_by_uid(self.instrument_uid)
+        instrument_title = instrument_obj.Title()  # use instrument name
+        sample.setRemarks(api.safe_unicode(instrument_title + ": " + remark))
 
     @staticmethod
     def is_sample(sample_id):
@@ -230,28 +275,27 @@ class DR3900Parser(InstrumentResultsFileParser):
             pass
 
     @staticmethod
-    def get_duplicate_or_qc(analysis_id, sample_service, ):
+    def get_duplicate_or_qc(analysis_id, sample_service,):
         portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
         query = dict(
             portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id
         )
         brains = api.search(query, ANALYSIS_CATALOG)
-        analyses = dict((a.getKeyword, a) for a in brains)
+        analyses = dict((a.Title, a) for a in brains)
         if len(brains) < 1:
             msg = (" No sample found with ID {}".format(analysis_id))
             raise AnalysisNotFound(msg)
         brains = [
-                v for k,
-                v in analyses.items() if k.startswith(sample_service)]
+            v for k, v in analyses.items() if k.startswith(sample_service)]
         if len(brains) < 1:
             msg = (
-                " No analysis found matching Keyword {}".format(
-                                                        sample_service))
+                " No analysis found matching Title {}".format(
+                    sample_service))
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
             msg = (
-                "Multiple brains found matching Keyword {}".format(
-                                                        sample_service))
+                "Multiple brains found matching Title {}".format(
+                    sample_service))
             raise MultipleAnalysesFound(msg)
         return brains[0]
 
@@ -259,12 +303,12 @@ class DR3900Parser(InstrumentResultsFileParser):
     def get_reference_sample(reference_sample_id, kw):
         query = dict(
             portal_type="ReferenceSample", getId=reference_sample_id
-        )
+        )  # This method might not be needed
         brains = api.search(query, SENAITE_CATALOG)
         if len(brains) < 1:
             msg = (
                 "No reference sample found with ID {}".format(
-                                                        reference_sample_id))
+                    reference_sample_id))
             raise AnalysisNotFound(msg)
         brains = [v for k, v in brains.items() if k == kw]
         if len(brains) < 1:
@@ -275,52 +319,51 @@ class DR3900Parser(InstrumentResultsFileParser):
             raise MultipleAnalysesFound(msg)
         return brains[0]
 
-    def get_reference_sample_analysis(self, reference_sample, kw):
-        kw = kw
+    def get_reference_sample_analysis(self, reference_sample, title):
+        title = title
         brains = self.get_reference_sample_analyses(reference_sample)
         if len(brains) < 1:
             msg = ("No sample found with ID {}".format(reference_sample))
             raise AnalysisNotFound(msg)
-        brains = [v for k, v in brains.items() if k == kw]
+        brains = [v for k, v in brains.items() if k == title]
         if len(brains) < 1:
-            msg = ("No analysis found matching Keyword {}".format(kw))
+            msg = ("No analysis found matching Keyword {}".format(title))
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
-            msg = ("Multiple brains found matching Keyword {}".format(kw))
+            msg = ("Multiple brains found matching Keyword {}".format(title))
             raise MultipleAnalysesFound(msg)
         return brains[0]
 
     @staticmethod
     def get_reference_sample_analyses(reference_sample):
         brains = reference_sample.getObject().getReferenceAnalyses()
-        return dict((a.getKeyword(), a) for a in brains)
+        return dict((a.Title, a) for a in brains)
 
-    def get_analysis(self, ar, kw):
+    def get_analysis(self, ar, title):
         analyses = self.get_analyses(ar)
         if len(analyses) < 1:
             msg = ' No sample found with ID {}'.format(ar)
             raise AnalysisNotFound(msg)
-        analyses = [v for k, v in analyses.items() if k == kw]
+        analyses = [v for k, v in analyses.items() if k == title]
         if len(analyses) < 1:
-            msg = ' No analysis found matching keyword {}'.format(kw)
+            msg = ' No analysis found matching keyword {}'.format(title)
             raise AnalysisNotFound(msg)
         if len(analyses) > 1:
-            msg = ' Multiple analyses found matching Keyword {}'.format(kw)
+            msg = ' Multiple analyses found matching Keyword {}'.format(title)
             raise MultipleAnalysesFound(msg)
         return analyses[0]
 
     @staticmethod
     def get_analyses(ar):
         analyses = ar.getAnalyses()
-        return dict((a.getKeyword, a) for a in analyses)
+        return dict((a.Title, a) for a in analyses)
 
     @staticmethod
     def extract_relevant_data(lines):
         new_lines = []
         for row in lines:
             split_row = row.encode("ascii", "ignore").split(",")
-            if len(split_row) > 13:
-                new_lines.append(','.join([str(elem) for elem in split_row]))
+            new_lines.append(split_row)
         return new_lines
 
     @staticmethod
@@ -339,37 +382,10 @@ class DR3900Parser(InstrumentResultsFileParser):
         except UnicodeDecodeError:
             return None
 
-    @staticmethod
-    def parse_headerlines(reader):
-        "To be implemented if necessary"
-        return True
 
-    @staticmethod
-    def interim_map_sorter(row):
-        interims = {}
-        for k, v in row.items():
-            sub = field_interim_map.get(k, '')
-            if sub != '':
-                interims[sub] = v
-        return interims
-
-    @staticmethod
-    def data_cleaning(parsed):
-        for k, v in parsed.items():
-            # Sometimes a Factor value is not included in sheet
-            if k == "Factor" and not v:
-                parsed[k] = 1
-            else:
-                try:
-                    parsed[k] = float(v)
-                except (TypeError, ValueError):
-                    parsed[k] = v
-        return parsed
-
-
-class dr3900import(object):
+class softwareimport(object):
     implements(IInstrumentImportInterface, IInstrumentAutoImportInterface)
-    title = "Hach DR3900"
+    title = "Bika Software"
     __file__ = abspath(__file__)
 
     def __init__(self, context):
@@ -392,11 +408,12 @@ class dr3900import(object):
         if not hasattr(infile, "filename"):
             errors.append(_("No file selected"))
 
-        parser = DR3900Parser(infile, worksheet=worksheet)
+        parser = SoftwareParser(infile, instrument, worksheet=worksheet)
 
         if parser:
 
-            status = ["sample_received", "attachment_due", "to_be_verified"]
+            status = [
+                "sample_received", "attachment_due", "to_be_verified"]
             if artoapply == "received":
                 status = ["sample_received"]
             elif artoapply == "received_tobeverified":
@@ -431,83 +448,3 @@ class dr3900import(object):
         results = {"errors": errors, "log": logs, "warns": warns}
 
         return json.dumps(results)
-
-
-class MyExport(BrowserView):
-
-    def __innit__(self, context, request):
-        self.context = context
-        self.request = request
-
-    def __call__(self, analyses):
-        uc = api.get_tool('uid_catalog')
-        instrument = self.context.getInstrument()
-        filename = '{}-{}.csv'.format(
-            self.context.getId(), instrument.Title())
-        now = DateTime().strftime('%m/%d/%Y')
-
-        layout = self.context.getLayout()
-        tmprows = []
-        parsed_analyses = {}
-        headers = ["#Sample Number", "#ID", "#Date", "#LIMS ID"]
-        tmprows.append(headers)
-        rows = []
-
-        for indx, item in enumerate(layout):
-            c_uid = item['container_uid']
-            a_uid = item['analysis_uid']
-            analysis = uc(UID=a_uid)[0].getObject() if a_uid else None
-            container = uc(UID=c_uid)[0].getObject() if c_uid else None
-
-            if item['type'] == 'a':
-                analysis_id = container.id
-            elif (item['type'] in 'bcd'):
-                analysis_id = analysis.getReferenceAnalysesGroupID()
-            if parsed_analyses.get(analysis_id):
-                continue
-            else:
-                tmprows.append([indx+1,
-                                analysis_id,
-                                now,
-                                ''])
-                parsed_analyses[analysis_id] = 10
-
-        rows = self.row_sorter(tmprows)
-        result = self.dict_to_string(rows)
-
-        setheader = self.request.RESPONSE.setHeader
-        setheader('Content-Length', len(result))
-        setheader('Content-Disposition', 'inline; filename=%s' % filename)
-        setheader('Content-Type', 'text/csv')
-        self.request.RESPONSE.write(result)
-
-    @staticmethod
-    def dict_to_string(rows):
-        final_rows = ''
-        interim_rows = []
-
-        for row in rows:
-            row = ','.join(str(item) for item in row)
-            interim_rows.append(row)
-        final_rows = '\r\n'.join(interim_rows)
-        return final_rows
-
-    @staticmethod
-    def row_sorter(rows):
-        for indx, row in enumerate(rows):
-            if indx != 0:
-                row[0] = indx
-        return rows
-
-
-class dr3900export(object):
-    implements(IInstrumentExportInterface)
-    title = "Hach DR3900 Exporter"
-    __file__ = abspath(__file__)  # noqa
-
-    def __init__(self, context, request=None):
-        self.context = context
-        self.request = request
-
-    def Export(self, context, request):
-        return MyExport(context, request)
