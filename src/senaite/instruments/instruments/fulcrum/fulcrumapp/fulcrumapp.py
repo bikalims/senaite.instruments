@@ -177,8 +177,8 @@ class FulcrumAppParser(InstrumentResultsFileParser):
                             msg="Error getting analysis for"
                                 " '${s}/${kw}': ${e}",
                             mapping={
-                                's': sample_id, '
-                                kw': sample_service,
+                                's': sample_id,
+                                'kw': sample_service,
                                 'e': repr(e)},
                             numline=row_nr)
                     continue
