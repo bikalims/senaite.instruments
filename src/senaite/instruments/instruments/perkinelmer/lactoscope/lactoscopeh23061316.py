@@ -36,7 +36,7 @@ from zope.publisher.browser import FileUpload
 from bika.lims import api
 from bika.lims.browser import BrowserView
 from bika.lims.catalog import CATALOG_ANALYSIS_REQUEST_LISTING
-from senaite.instruments import senaiteMessageFactory as _
+from senaite.OESinterface import _
 from senaite.core.catalog import ANALYSIS_CATALOG, SENAITE_CATALOG
 from senaite.core.exportimport.instruments import (
     IInstrumentAutoImportInterface,
@@ -222,6 +222,7 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
         parsed = {subn(r'mg100g', '', k)[0]: v for k, v in parsed.items() if k}
         parsed = {subn(r'mS', '', k)[0]: v for k, v in parsed.items() if k}
         parsed = {subn(r'mC', '', k)[0]: v for k, v in parsed.items() if k}
+        parsed = {subn(r'-', '', k)[0]: v for k, v in parsed.items() if k}
 
         warnings = False
         for kw, v in parsed.items():
@@ -232,6 +233,10 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
             if kw == "Lab":
                 continue
             if kw == "ProductName":
+                continue
+            if kw == "Warning":
+                continue
+            if kw == "SampleID":
                 continue
             try:
                 analysis = self.get_analysis(ar, kw)
