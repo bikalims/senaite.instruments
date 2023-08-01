@@ -41,10 +41,12 @@ from senaite.core.catalog import ANALYSIS_CATALOG, SENAITE_CATALOG
 from senaite.core.exportimport.instruments import (
     IInstrumentAutoImportInterface,
     IInstrumentExportInterface,
-    IInstrumentImportInterface)
+    IInstrumentImportInterface,
+)
 from senaite.core.exportimport.instruments.resultsimport import (
     AnalysisResultsImporter,
-    InstrumentResultsFileParser)
+    InstrumentResultsFileParser,
+)
 from senaite.instruments.instrument import FileStub
 from senaite.instruments.instrument import SheetNotFound
 
@@ -123,15 +125,17 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
         for row in sheet.rows:
             line = []
             for cell in row:
-                new_val = ''
+                new_val = ""
                 if cell.number_format == "0.00%":
-                    new_val = '{}%'.format(cell.value * 100)
+                    new_val = "{}%".format(cell.value * 100)
                 cellval = new_val if new_val else cell.value
 
                 try:
                     value = "" if cellval is None else str(cellval).encode("utf8")
                 except UnicodeEncodeError:
-                    value = "" if cellval is None else safe_unicode(cellval).encode("utf8")
+                    value = (
+                        "" if cellval is None else safe_unicode(cellval).encode("utf8")
+                    )
                 if "\n" in value:  # fixme multi-line cell gives only 1st line
                     value = value.split("\n")[0]
                 line.append(value.strip())
@@ -160,8 +164,7 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
                     )
                     break
                 except SheetNotFound:
-                    self.err(
-                        "Sheet not found in workbook: %s" % self.worksheet)
+                    self.err("Sheet not found in workbook: %s" % self.worksheet)
                     return -1
                 except Exception as e:  # noqa
                     pass
@@ -175,7 +178,7 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
         lines = self.csv_data.readlines()
         reader = csv.DictReader(lines)
         for row in reader:
-            sample_id = row.get('Sample ID', '')
+            sample_id = row.get("Sample ID", "")
             portal_type = self.get_portal_type(sample_id)
             if portal_type == "AnalysisRequest":
                 self.parse_ar_row(sample_id, reader.line_num, row)
@@ -184,8 +187,7 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
                 self.parse_duplicate_row(sample_id, reader.line_num, row)
 
             elif portal_type == "ReferenceSample":
-                self.parse_reference_sample_row(
-                        sample_id, reader.line_num, row)
+                self.parse_reference_sample_row(sample_id, reader.line_num, row)
             else:
                 self.warn(
                     msg="No results found for '${sample_id}'",
@@ -214,8 +216,12 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
 
     def parse_ar_row(self, sample_id, row_nr, row):
         ar = self.get_ar(sample_id)
-        parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in row.items()}
-        parsed = {subn(r'ppm', '', k)[0]: v for k, v in parsed.items() if k}
+        parsed = {subn(r"[^\w\d\-_]*", "", k)[0]: v for k, v in row.items()}
+        # m°C
+        parsed = {subn(r'mm', '', k)[0]: v for k, v in parsed.items() if k}
+        parsed = {subn(r'mg100g', '', k)[0]: v for k, v in parsed.items() if k}
+        parsed = {subn(r'mS', '', k)[0]: v for k, v in parsed.items() if k}
+        parsed = {subn(r'mC', '', k)[0]: v for k, v in parsed.items() if k}
 
         warnings = False
         for kw, v in parsed.items():
@@ -234,12 +240,13 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
                     continue
                 keyword = analysis.getKeyword
                 new_dict = {
-                        "Lab": parsed['Lab'],
-                        "ProductName": parsed['ProductName'],
-                        "InstrumentSerialNumber": parsed['InstrumentSerialNumber'],
-                        "DateTimeofAnalysis": parsed['DateTimeofAnalysis'],
-                        "SampleID": parsed['SampleID'],
-                        kw: parsed[kw]}
+                    "Lab": parsed["Lab"],
+                    "ProductName": parsed["ProductName"],
+                    "InstrumentSerialNumber": parsed["InstrumentSerialNumber"],
+                    "DateTimeofAnalysis": parsed["DateTimeofAnalysis"],
+                    "SampleID": parsed["SampleID"],
+                    kw: parsed[kw],
+                }
                 self.parse_row(row_nr, new_dict, keyword)
             except Exception as e:
                 self.warn(
@@ -254,7 +261,12 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
 
     def parse_duplicate_row(self, sample_id, row_nr, row):
         parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in row.items()}
-        parsed = {subn(r'ppm', '', k)[0]: v for k, v in parsed.items() if k}
+
+        # m°C
+        parsed = {subn(r'mm', '', k)[0]: v for k, v in parsed.items() if k}
+        parsed = {subn(r'mg100g', '', k)[0]: v for k, v in parsed.items() if k}
+        parsed = {subn(r'mS', '', k)[0]: v for k, v in parsed.items() if k}
+        parsed = {subn(r'mC', '', k)[0]: v for k, v in parsed.items() if k}
 
         warnings = False
         for kw, v in parsed.items():
@@ -269,12 +281,13 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
             try:
                 keyword = self.getDuplicateKeyord(sample_id, kw)
                 new_dict = {
-                        "Lab": parsed['Lab'],
-                        "ProductName": parsed['ProductName'],
-                        "InstrumentSerialNumber": parsed['InstrumentSerialNumber'],
-                        "DateTimeofAnalysis": parsed['DateTimeofAnalysis'],
-                        "SampleID": parsed['SampleID'],
-                        kw: parsed[kw]}
+                    "Lab": parsed["Lab"],
+                    "ProductName": parsed["ProductName"],
+                    "InstrumentSerialNumber": parsed["InstrumentSerialNumber"],
+                    "DateTimeofAnalysis": parsed["DateTimeofAnalysis"],
+                    "SampleID": parsed["SampleID"],
+                    kw: parsed[kw],
+                }
                 self.parse_row(row_nr, new_dict, keyword)
             except Exception as e:
                 self.warn(
@@ -287,14 +300,17 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
         if warnings:
             return 0
 
-
     def getDuplicateKeyord(self, sample_id, kw):
         analysis = self.get_duplicate_or_qc_analysis(sample_id, kw)
         return analysis.getKeyword
 
     def parse_reference_sample_row(self, sample_id, row_nr, row):
         parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in row.items()}
-        parsed = {subn(r'ppm', '', k)[0]: v for k, v in parsed.items() if k}
+        # m°C
+        parsed = {subn(r'mm', '', k)[0]: v for k, v in parsed.items() if k}
+        parsed = {subn(r'mg100g', '', k)[0]: v for k, v in parsed.items() if k}
+        parsed = {subn(r'mS', '', k)[0]: v for k, v in parsed.items() if k}
+        parsed = {subn(r'mC', '', k)[0]: v for k, v in parsed.items() if k}
 
         warnings = False
         for kw, v in parsed.items():
@@ -309,12 +325,13 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
             try:
                 keyword = self.getReferenceSampleKeyword(sample_id, kw)
                 new_dict = {
-                        "Lab": parsed['Lab'],
-                        "ProductName": parsed['ProductName'],
-                        "InstrumentSerialNumber": parsed['InstrumentSerialNumber'],
-                        "DateTimeofAnalysis": parsed['DateTimeofAnalysis'],
-                        "SampleID": parsed['SampleID'],
-                        kw: parsed[kw]}
+                    "Lab": parsed["Lab"],
+                    "ProductName": parsed["ProductName"],
+                    "InstrumentSerialNumber": parsed["InstrumentSerialNumber"],
+                    "DateTimeofAnalysis": parsed["DateTimeofAnalysis"],
+                    "SampleID": parsed["SampleID"],
+                    kw: parsed[kw],
+                }
                 self.parse_row(row_nr, new_dict, keyword)
             except Exception as e:
                 self.warn(
@@ -337,10 +354,10 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
         brains = self.get_reference_sample_analyses(reference_sample)
         brains = [v for k, v in brains.items() if k == kw]
         if len(brains) < 1:
-            msg = ("No analysis found matching Keyword {}".format(kw))
+            msg = "No analysis found matching Keyword {}".format(kw)
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
-            msg = ("Multiple brains found matching Keyword '{}'".format(kw))
+            msg = "Multiple brains found matching Keyword '{}'".format(kw)
             raise MultipleAnalysesFound(msg)
         return brains[0]
 
@@ -352,17 +369,15 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
     @staticmethod
     def get_duplicate_or_qc_analysis(analysis_id, kw):
         portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
-        query = dict(
-            portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id
-        )
+        query = dict(portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id)
         brains = api.search(query, ANALYSIS_CATALOG)
         analyses = dict((a.getKeyword, a) for a in brains)
         brains = [v for k, v in analyses.items() if k == kw]
         if len(brains) < 1:
-            msg = ("No analysis found matching Keyword {}".format(kw))
+            msg = "No analysis found matching Keyword {}".format(kw)
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
-            msg = ("Multiple brains found matching Keyword {}".format(kw))
+            msg = "Multiple brains found matching Keyword {}".format(kw)
             raise MultipleAnalysesFound(msg)
         return brains[0]
 
@@ -390,13 +405,11 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
         analyses = self.get_analyses(ar)
         analyses = [v for k, v in analyses.items() if k == kw]
         if len(analyses) < 1:
-            self.log('No analysis found matching keyword "${kw}"',
-                     mapping=dict(kw=kw))
+            self.log('No analysis found matching keyword "${kw}"', mapping=dict(kw=kw))
             return None
         if len(analyses) > 1:
             self.warn(
-                'Multiple analyses found matching Keyword "${kw}"',
-                mapping=dict(kw=kw)
+                'Multiple analyses found matching Keyword "${kw}"', mapping=dict(kw=kw)
             )
             return None
         return analyses[0]
@@ -405,31 +418,26 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
     def is_analysis_group_id(analysis_group_id):
         portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
         query = dict(
-            portal_type=portal_types,
-            getReferenceAnalysesGroupID=analysis_group_id
+            portal_type=portal_types, getReferenceAnalysesGroupID=analysis_group_id
         )
         brains = api.search(query, ANALYSIS_CATALOG)
         return True if brains else False
 
     @staticmethod
     def is_reference_sample(reference_sample_id):
-        query = dict(
-            portal_type="ReferenceSample", getId=reference_sample_id
-        )
+        query = dict(portal_type="ReferenceSample", getId=reference_sample_id)
         brains = api.search(query, SENAITE_CATALOG)
         return True if brains else False
 
     @staticmethod
     def get_reference_sample(reference_sample_id, kw):
-        query = dict(
-            portal_type="ReferenceSample", getId=reference_sample_id
-        )
+        query = dict(portal_type="ReferenceSample", getId=reference_sample_id)
         brains = api.search(query, SENAITE_CATALOG)
         if len(brains) < 1:
-            msg = ("No reference sample found matching Keyword {}".format(kw))
+            msg = "No reference sample found matching Keyword {}".format(kw)
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
-            msg = ("Multiple brains found matching Keyword {}".format(kw))
+            msg = "Multiple brains found matching Keyword {}".format(kw)
             raise MultipleAnalysesFound(msg)
         return brains[0]
 
@@ -464,8 +472,7 @@ class importer(object):
             if artoapply == "received":
                 status = ["sample_received"]
             elif artoapply == "received_tobeverified":
-                status = ["sample_received", "attachment_due",
-                          "to_be_verified"]
+                status = ["sample_received", "attachment_due", "to_be_verified"]
 
             over = [False, False]
             if override == "nooverride":
@@ -498,16 +505,14 @@ class importer(object):
 
 
 class MyExport(BrowserView):
-
     def __init__(self, context, request):
         self.context = context
         self.request = request
 
     def __call__(self, analyses):
-        uc = api.get_tool('uid_catalog')
+        uc = api.get_tool("uid_catalog")
         instrument = self.context.getInstrument()
-        filename = '{}-{}.csv'.format(
-            self.context.getId(), instrument.Title())
+        filename = "{}-{}.csv".format(self.context.getId(), instrument.Title())
 
         layout = self.context.getLayout()
         tmprows = []
@@ -516,41 +521,38 @@ class MyExport(BrowserView):
         tmprows.append(headers)
 
         for indx, item in enumerate(layout):
-            c_uid = item['container_uid']
-            a_uid = item['analysis_uid']
+            c_uid = item["container_uid"]
+            a_uid = item["analysis_uid"]
             analysis = uc(UID=a_uid)[0].getObject() if a_uid else None
             container = uc(UID=c_uid)[0].getObject() if c_uid else None
 
-            if item['type'] == 'a':
+            if item["type"] == "a":
                 analysis_id = container.id
-            elif (item['type'] in 'bcd'):
+            elif item["type"] in "bcd":
                 analysis_id = analysis.getReferenceAnalysesGroupID()
             if parsed_analyses.get(analysis_id):
                 continue
             else:
-                tmprows.append([analysis_id,
-                                "",
-                                "",
-                                ""])
+                tmprows.append([analysis_id, "", "", ""])
                 parsed_analyses[analysis_id] = 10
 
         result = self.dict_to_string(tmprows)
 
         setheader = self.request.RESPONSE.setHeader
-        setheader('Content-Length', len(result))
-        setheader('Content-Disposition', 'inline; filename=%s' % filename)
-        setheader('Content-Type', 'text/csv')
+        setheader("Content-Length", len(result))
+        setheader("Content-Disposition", "inline; filename=%s" % filename)
+        setheader("Content-Type", "text/csv")
         self.request.RESPONSE.write(result)
 
     @staticmethod
     def dict_to_string(rows):
-        final_rows = ''
+        final_rows = ""
         interim_rows = []
 
         for row in rows:
-            row = ','.join(str(item) for item in row)
+            row = ",".join(str(item) for item in row)
             interim_rows.append(row)
-        final_rows = '\r\n'.join(interim_rows)
+        final_rows = "\r\n".join(interim_rows)
         return final_rows
 
 

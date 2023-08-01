@@ -31,91 +31,102 @@ from plone.app.testing import login
 from plone.app.testing import setRoles
 
 from bika.lims import api
-from senaite.instruments.instruments.perkinelmer.lactoscope.lactoscopeh23061316 import importer
+from senaite.instruments.instruments.perkinelmer.lactoscope.lactoscopeh23061316 import (
+    importer,
+)
 from senaite.instruments.tests import TestFile
 from senaite.instruments.tests.base import BaseTestCase
 from senaite.instruments.tests.base import DataTestCase
 from zope.publisher.browser import FileUpload
 from zope.publisher.browser import TestRequest
 
-IFACE = 'senaite.instruments.instruments' \
-        '.perkinelmer.lactoscope.lactoscopeh23061316.importer'
-TITLE = 'Lactoscope H230613 16 COMP'
+IFACE = (
+    "senaite.instruments.instruments"
+    ".perkinelmer.lactoscope.lactoscopeh23061316.importer"
+)
+TITLE = "Lactoscope H230613 16 COMP"
 
 here = abspath(dirname(__file__))
-path = join(here, 'files', 'instruments', 'perkinelmer', 'lactoscope')
-fn1 = join(path, 'Lactoscope_H230613_16COMP.xlsx')
+path = join(here, "files", "instruments", "perkinelmer", "lactoscope")
+fn1 = join(path, "Lactoscope_H230613_16COMP.xlsx")
 
-service_interims = [
-]
+service_interims = []
 
-calculation_interims = [
-]
+calculation_interims = []
 
 
 class TestLactoscopeH23061316COMP(DataTestCase):
-
     def setUp(self):
         super(TestLactoscopeH23061316COMP, self).setUp()
-        setRoles(self.portal, TEST_USER_ID, ['Member', 'LabManager'])
+        setRoles(self.portal, TEST_USER_ID, ["Member", "LabManager"])
         login(self.portal, TEST_USER_NAME)
 
-        self.client = self.add_client(title='Happy Hills', ClientID='HH')
+        self.client = self.add_client(title="Happy Hills", ClientID="HH")
 
-        self.contact = self.add_contact(
-            self.client, Firstname='Rita', Surname='Mohale')
+        self.contact = self.add_contact(self.client, Firstname="Rita", Surname="Mohale")
 
         self.instrument = self.add_instrument(
             title=TITLE,
-            InstrumentType=self.add_instrumenttype(title='5110 ICP-OES'),
-            Manufacturer=self.add_manufacturer(title='ICP-OES'),
-            Supplier=self.add_supplier(title='Instruments Inc'),
+            InstrumentType=self.add_instrumenttype(title="5110 ICP-OES"),
+            Manufacturer=self.add_manufacturer(title="ICP-OES"),
+            Supplier=self.add_supplier(title="Instruments Inc"),
             ImportDataInterface=IFACE,
         )
 
         self.services = [
-            self.add_analysisservice(title='Predicted Fat % m/m',
-                                     Keyword='PredictedFatmm',
-                                     PointOfCapture='lab',
-                                     Category='Metals',
-                                     ),
-            self.add_analysisservice(title='Predicted Protein % m/m',
-                                     Keyword='PredictedProteinmm',
-                                     PointOfCapture='lab',
-                                     Category='Metals',
-                                     )
+            self.add_analysisservice(
+                title="Predicted Fat % m/m",
+                Keyword="PredictedFat",
+                PointOfCapture="lab",
+                Category="Metals",
+            ),
+            self.add_analysisservice(
+                title="Predicted Protein % m/m",
+                Keyword="PredictedProtein",
+                PointOfCapture="lab",
+                Category="Metals",
+            ),
         ]
         self.sampletype = self.add_sampletype(
-            title='Dust', RetentionPeriod=dict(days=1),
-            MinimumVolume='1 kg', Prefix='DU')
+            title="Dust",
+            RetentionPeriod=dict(days=1),
+            MinimumVolume="1 kg",
+            Prefix="DU",
+        )
 
     def test_import_xlsx(self):
         ar = self.add_analysisrequest(
             self.client,
-            dict(Client=self.client.UID(),
-                 Contact=self.contact.UID(),
-                 DateSampled=datetime.now().date().isoformat(),
-                 SampleType=self.sampletype.UID()),
-            [srv.UID() for srv in self.services])
-        api.do_transition_for(ar, 'receive')
+            dict(
+                Client=self.client.UID(),
+                Contact=self.contact.UID(),
+                DateSampled=datetime.now().date().isoformat(),
+                SampleType=self.sampletype.UID(),
+            ),
+            [srv.UID() for srv in self.services],
+        )
+        api.do_transition_for(ar, "receive")
         # worksheet - test breaks on worksheet when adding an attachment
         # worksheet = self.add_worksheet(ar)
         # duplicate = self.add_duplicate(worksheet)
-        data = open(fn1, 'rb').read()
+        data = open(fn1, "rb").read()
         import_file = FileUpload(TestFile(cStringIO.StringIO(data), fn1))
-        request = TestRequest(form=dict(
-            instrument_results_file_format='xlsx',
-            submitted=True,
-            artoapply='received_tobeverified',
-            results_override='override',
-            instrument_results_file=import_file,
-            instrument=''))
+        request = TestRequest(
+            form=dict(
+                instrument_results_file_format="xlsx",
+                submitted=True,
+                artoapply="received_tobeverified",
+                results_override="override",
+                instrument_results_file=import_file,
+                instrument="",
+            )
+        )
         results = importer.Import(self.portal, request)
-        pfm = ar.getAnalyses(full_objects=True, getKeyword='PredictedFatmm')[0]
-        ppm = ar.getAnalyses(full_objects=True, getKeyword='PredictedProteinmm')[0]
+        pfm = ar.getAnalyses(full_objects=True, getKeyword="PredictedFat")[0]
+        ppm = ar.getAnalyses(full_objects=True, getKeyword="PredictedProtein")[0]
         test_results = eval(results)  # noqa
-        self.assertEqual(pfm.getResult(), '5.22')
-        self.assertEqual(ppm.getResult(), '3.88')
+        self.assertEqual(pfm.getResult(), "5.22")
+        self.assertEqual(ppm.getResult(), "3.88")
 
 
 def test_suite():
