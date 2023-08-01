@@ -36,7 +36,7 @@ from zope.publisher.browser import FileUpload
 from bika.lims import api
 from bika.lims.browser import BrowserView
 from bika.lims.catalog import CATALOG_ANALYSIS_REQUEST_LISTING
-from senaite.OESinterface import _
+from senaite.instruments import senaiteMessageFactory
 from senaite.core.catalog import ANALYSIS_CATALOG, SENAITE_CATALOG
 from senaite.core.exportimport.instruments import (
     IInstrumentAutoImportInterface,
