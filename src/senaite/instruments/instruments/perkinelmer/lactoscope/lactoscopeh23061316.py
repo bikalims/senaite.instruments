@@ -283,6 +283,10 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
                 continue
             if kw == "ProductName":
                 continue
+            if kw == "Warning":
+                continue
+            if kw == "SampleID":
+                continue
             try:
                 keyword = self.getDuplicateKeyord(sample_id, kw)
                 new_dict = {
@@ -326,6 +330,10 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
             if kw == "Lab":
                 continue
             if kw == "ProductName":
+                continue
+            if kw == "Warning":
+                continue
+            if kw == "SampleID":
                 continue
             try:
                 keyword = self.getReferenceSampleKeyword(sample_id, kw)
