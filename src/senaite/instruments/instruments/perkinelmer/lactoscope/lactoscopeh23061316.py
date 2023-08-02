@@ -36,7 +36,7 @@ from zope.publisher.browser import FileUpload
 from bika.lims import api
 from bika.lims.browser import BrowserView
 from bika.lims.catalog import CATALOG_ANALYSIS_REQUEST_LISTING
-from senaite.instruments import senaiteMessageFactory
+from senaite.instruments import senaiteMessageFactory as _
 from senaite.core.catalog import ANALYSIS_CATALOG, SENAITE_CATALOG
 from senaite.core.exportimport.instruments import (
     IInstrumentAutoImportInterface,
@@ -367,10 +367,12 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
         brains = self.get_reference_sample_analyses(reference_sample)
         brains = [v for k, v in brains.items() if k == kw]
         if len(brains) < 1:
-            msg = "No analysis found matching Keyword {}".format(kw)
+            lmsg = "No analysis found for sample {} matching Keyword {}"
+            msg = lmsg.format(reference_sample, kw)
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
-            msg = "Multiple brains found matching Keyword '{}'".format(kw)
+            lmsg = "Multiple objects found for sample {} matching Keyword '{}'"
+            msg = lmsg.format(reference_sample, kw)
             raise MultipleAnalysesFound(msg)
         return brains[0]
 
@@ -387,10 +389,12 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
         analyses = dict((a.getKeyword, a) for a in brains)
         brains = [v for k, v in analyses.items() if k == kw]
         if len(brains) < 1:
-            msg = "No analysis found matching Keyword {}".format(kw)
+            lmsg = "No analysis found for sample {} matching Keyword {}"
+            msg = lmsg.format(analysis_id, kw)
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
-            msg = "Multiple brains found matching Keyword {}".format(kw)
+            lmsg = "Multiple objects found for sample {} matching Keyword {}"
+            msg = lmsg.format(analysis_id, kw)
             raise MultipleAnalysesFound(msg)
         return brains[0]
 
@@ -418,7 +422,8 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
         analyses = self.get_analyses(ar)
         analyses = [v for k, v in analyses.items() if k == kw]
         if len(analyses) < 1:
-            self.log('No analysis found matching keyword "${kw}"', mapping=dict(kw=kw))
+            msg = """No analysis found for sample '${ar}' matching keyword '${kw}'"""
+            self.log(msg, mapping=dict(kw=kw, ar=ar.getId()))
             return None
         if len(analyses) > 1:
             self.warn(
@@ -431,7 +436,8 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
     def is_analysis_group_id(analysis_group_id):
         portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
         query = dict(
-            portal_type=portal_types, getReferenceAnalysesGroupID=analysis_group_id
+            portal_type=portal_types,
+            getReferenceAnalysesGroupID=analysis_group_id
         )
         brains = api.search(query, ANALYSIS_CATALOG)
         return True if brains else False
@@ -447,10 +453,12 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
         query = dict(portal_type="ReferenceSample", getId=reference_sample_id)
         brains = api.search(query, SENAITE_CATALOG)
         if len(brains) < 1:
-            msg = "No reference sample found matching Keyword {}".format(kw)
+            lmsg = "No reference sample found for sample {} matching Keyword {}"
+            msg = lmsg.format(reference_sample_id, kw)
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
-            msg = "Multiple brains found matching Keyword {}".format(kw)
+            lmsg = "Multiple objects found for sample {} matching Keyword {}"
+            msg = lmsg.format(reference_sample_id, kw)
             raise MultipleAnalysesFound(msg)
         return brains[0]
 
