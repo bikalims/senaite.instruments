@@ -63,7 +63,7 @@ class AnalysisNotFound(Exception):
     pass
 
 
-class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
+class SomascopeH23061316SCCParser(InstrumentResultsFileParser):
     ar = None
 
     def __init__(self, infile, worksheet=None, encoding=None, delimiter=None):
@@ -178,7 +178,7 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
         lines = self.csv_data.readlines()
         reader = csv.DictReader(lines)
         for row in reader:
-            sample_id = row.get("Sample ID", "")
+            sample_id = row.get("Name", "")
             portal_type = self.get_portal_type(sample_id)
             if portal_type == "AnalysisRequest":
                 self.parse_ar_row(sample_id, reader.line_num, row)
@@ -210,152 +210,69 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
         return portal_type
 
     def parse_row(self, row_nr, parsed, keyword):
-        parsed.update({"DefaultResult": keyword})
-        self._addRawResult(parsed.get("SampleID"), {keyword: parsed})
+        parsed.update({"DefaultResult": "Mean"})
+        self._addRawResult(parsed.get("Name"), {keyword: parsed})
         return 0
 
     def parse_ar_row(self, sample_id, row_nr, row):
         ar = self.get_ar(sample_id)
-        parsed = {subn(r"[^\w\d\-_]*", "", k)[0]: v for k, v in row.items()}
-        # m°C
-        parsed = {subn(r'mm', '', k)[0]: v for k, v in parsed.items() if k}
-        parsed = {subn(r'mg100g', '', k)[0]: v for k, v in parsed.items() if k}
-        parsed = {subn(r'mS', '', k)[0]: v for k, v in parsed.items() if k}
-        parsed = {subn(r'mC', '', k)[0]: v for k, v in parsed.items() if k}
-        parsed = {subn(r'-', '', k)[0]: v for k, v in parsed.items() if k}
+        items = row.items()
+        parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
 
-        warnings = False
-        for kw, v in parsed.items():
-            if kw == "InstrumentSerialNumber":
-                continue
-            if kw == "DateTimeofAnalysis":
-                continue
-            if kw == "Lab":
-                continue
-            if kw == "ProductName":
-                continue
-            if kw == "Warning":
-                continue
-            if kw == "SampleID":
-                continue
-            try:
-                analysis = self.get_analysis(ar, kw)
-                if not analysis:
-                    warnings = True
-                    continue
-                keyword = analysis.getKeyword
-                new_dict = {
-                    "Lab": parsed["Lab"],
-                    "ProductName": parsed["ProductName"],
-                    "InstrumentSerialNumber": parsed["InstrumentSerialNumber"],
-                    "DateTimeofAnalysis": parsed["DateTimeofAnalysis"],
-                    "SampleID": parsed["SampleID"],
-                    kw: parsed[kw],
-                }
-                self.parse_row(row_nr, new_dict, keyword)
-            except Exception as e:
-                self.warn(
-                    msg="Error getting analysis for '${kw}': ${sample_id}",
-                    mapping={"kw": kw, "sample_id": sample_id},
-                    numline=row_nr,
-                    # line=str(row),
-                )
-                warnings = True
-        if warnings:
-            return 0
+        keyword = "DU_SCC"
+        try:
+            analysis = self.get_analysis(ar, keyword)
+            if not analysis:
+                return 0
+        except Exception as e:
+            self.warn(
+                msg="Error getting analysis for '${kw}': ${sample_id}",
+                mapping={"kw": keyword, "sample_id": sample_id},
+                numline=row_nr,
+            )
+            return
+        return self.parse_row(row_nr, parsed, keyword)
 
     def parse_duplicate_row(self, sample_id, row_nr, row):
-        parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in row.items()}
+        items = row.items()
+        parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
 
-        # m°C
-        parsed = {subn(r'mm', '', k)[0]: v for k, v in parsed.items() if k}
-        parsed = {subn(r'mg100g', '', k)[0]: v for k, v in parsed.items() if k}
-        parsed = {subn(r'mS', '', k)[0]: v for k, v in parsed.items() if k}
-        parsed = {subn(r'mC', '', k)[0]: v for k, v in parsed.items() if k}
 
-        warnings = False
-        for kw, v in parsed.items():
-            if kw == "InstrumentSerialNumber":
-                continue
-            if kw == "DateTimeofAnalysis":
-                continue
-            if kw == "Lab":
-                continue
-            if kw == "ProductName":
-                continue
-            if kw == "Warning":
-                continue
-            if kw == "SampleID":
-                continue
-            try:
-                keyword = self.getDuplicateKeyord(sample_id, kw)
-                new_dict = {
-                    "Lab": parsed["Lab"],
-                    "ProductName": parsed["ProductName"],
-                    "InstrumentSerialNumber": parsed["InstrumentSerialNumber"],
-                    "DateTimeofAnalysis": parsed["DateTimeofAnalysis"],
-                    "SampleID": parsed["SampleID"],
-                    kw: parsed[kw],
-                }
-                self.parse_row(row_nr, new_dict, keyword)
-            except Exception as e:
-                self.warn(
-                    msg="Error getting analysis for '${kw}': ${sample_id}",
-                    mapping={"kw": kw, "sample_id": sample_id},
-                    numline=row_nr,
-                    # line=str(row),
-                )
-                warnings = True
-        if warnings:
-            return 0
+        keyword = "DU_SCC"
+        try:
+            if not self.getDuplicateKeyord(sample_id, keyword)
+                return 0
+        except Exception as e:
+            self.warn(
+                msg="Error getting analysis for '${kw}': ${sample_id}",
+                mapping={"kw": keyword, "sample_id": sample_id},
+                numline=row_nr,
+            )
+            return
+        return self.parse_row(row_nr, parsed, keyword)
 
     def getDuplicateKeyord(self, sample_id, kw):
         analysis = self.get_duplicate_or_qc_analysis(sample_id, kw)
         return analysis.getKeyword
 
     def parse_reference_sample_row(self, sample_id, row_nr, row):
-        parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in row.items()}
-        # m°C
-        parsed = {subn(r'mm', '', k)[0]: v for k, v in parsed.items() if k}
-        parsed = {subn(r'mg100g', '', k)[0]: v for k, v in parsed.items() if k}
-        parsed = {subn(r'mS', '', k)[0]: v for k, v in parsed.items() if k}
-        parsed = {subn(r'mC', '', k)[0]: v for k, v in parsed.items() if k}
+        items = row.items()
+        parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
 
-        warnings = False
-        for kw, v in parsed.items():
-            if kw == "InstrumentSerialNumber":
-                continue
-            if kw == "DateTimeofAnalysis":
-                continue
-            if kw == "Lab":
-                continue
-            if kw == "ProductName":
-                continue
-            if kw == "Warning":
-                continue
-            if kw == "SampleID":
-                continue
-            try:
-                keyword = self.getReferenceSampleKeyword(sample_id, kw)
-                new_dict = {
-                    "Lab": parsed["Lab"],
-                    "ProductName": parsed["ProductName"],
-                    "InstrumentSerialNumber": parsed["InstrumentSerialNumber"],
-                    "DateTimeofAnalysis": parsed["DateTimeofAnalysis"],
-                    "SampleID": parsed["SampleID"],
-                    kw: parsed[kw],
-                }
-                self.parse_row(row_nr, new_dict, keyword)
-            except Exception as e:
-                self.warn(
-                    msg="Error getting analysis for '${kw}': ${sample_id}",
-                    mapping={"kw": kw, "sample_id": sample_id},
-                    numline=row_nr,
-                    # line=str(row),
-                )
-                warnings = True
-        if warnings:
-            return 0
+
+        keyword = "DU_SCC"
+        try:
+            if not self.getReferenceSampleKeyword(sample_id, keyword)
+                return 0
+        except Exception as e:
+            self.warn(
+                msg="Error getting analysis for '${kw}': ${sample_id}",
+                mapping={"kw": keyword, "sample_id": sample_id},
+                numline=row_nr,
+            )
+            return
+        return self.parse_row(row_nr, parsed, keyword)
+
 
     def getReferenceSampleKeyword(self, sample_id, kw):
         sample_reference = self.get_reference_sample(sample_id, kw)
@@ -465,7 +382,7 @@ class LactoscopeH23061316COMPParser(InstrumentResultsFileParser):
 
 class importer(object):
     implements(IInstrumentImportInterface, IInstrumentAutoImportInterface)
-    title = "Perkin Elmer LactoScope H230613-16 COMP"
+    title = "Perkin Elmer SomaScope H230613-16 SCC"
     __file__ = abspath(__file__)  # noqa
 
     def __init__(self, context):
@@ -486,7 +403,7 @@ class importer(object):
         override = request.form["results_override"]
         instrument = request.form.get("instrument", None)
         worksheet = request.form.get("worksheet", 0)
-        parser = LactoscopeH23061316COMPParser(infile, worksheet=worksheet)
+        parser = SomascopeH23061316SCCParser(infile, worksheet=worksheet)
         if parser:
 
             status = ["sample_received", "attachment_due", "to_be_verified"]

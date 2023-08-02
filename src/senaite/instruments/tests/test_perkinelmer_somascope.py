@@ -31,7 +31,7 @@ from plone.app.testing import login
 from plone.app.testing import setRoles
 
 from bika.lims import api
-from senaite.instruments.instruments.perkinelmer.lactoscope.lactoscopeh23061316 import (
+from senaite.instruments.instruments.perkinelmer.somascope.somascopeh23061316scc import (
     importer,
 )
 from senaite.instruments.tests import TestFile
@@ -42,22 +42,22 @@ from zope.publisher.browser import TestRequest
 
 IFACE = (
     "senaite.instruments.instruments"
-    ".perkinelmer.lactoscope.lactoscopeh23061316.importer"
+    ".perkinelmer.somascope.somascopeh23061316scc.importer"
 )
-TITLE = "Lactoscope H230613 16 COMP"
+TITLE = "Somascope H230613-16 SCC"
 
 here = abspath(dirname(__file__))
-path = join(here, "files", "instruments", "perkinelmer", "lactoscope")
-fn1 = join(path, "Lactoscope_H230613_16COMP.xlsx")
+path = join(here, "files", "instruments", "perkinelmer", "somascope")
+fn1 = join(path, "Somascope_H230613-16_SCC.xlsx")
 
 service_interims = []
 
 calculation_interims = []
 
 
-class TestLactoscopeH23061316COMP(DataTestCase):
+class TestSomascopeH23061316SCC(DataTestCase):
     def setUp(self):
-        super(TestLactoscopeH23061316COMP, self).setUp()
+        super(TestSomascopeH23061316SCC, self).setUp()
         setRoles(self.portal, TEST_USER_ID, ["Member", "LabManager"])
         login(self.portal, TEST_USER_NAME)
 
@@ -75,14 +75,8 @@ class TestLactoscopeH23061316COMP(DataTestCase):
 
         self.services = [
             self.add_analysisservice(
-                title="Predicted Fat % m/m",
-                Keyword="PredictedFat",
-                PointOfCapture="lab",
-                Category="Metals",
-            ),
-            self.add_analysisservice(
-                title="Predicted Protein % m/m",
-                Keyword="PredictedProtein",
+                title="DU.SCC - Somatic Cell Enumerations in Milk",
+                Keyword="DU_SCC",
                 PointOfCapture="lab",
                 Category="Metals",
             ),
@@ -122,14 +116,12 @@ class TestLactoscopeH23061316COMP(DataTestCase):
             )
         )
         results = importer.Import(self.portal, request)
-        pfm = ar.getAnalyses(full_objects=True, getKeyword="PredictedFat")[0]
-        ppm = ar.getAnalyses(full_objects=True, getKeyword="PredictedProtein")[0]
+        du = ar.getAnalyses(full_objects=True, getKeyword="DU_SCC")[0]
         test_results = eval(results)  # noqa
-        self.assertEqual(pfm.getResult(), "5.22")
-        self.assertEqual(ppm.getResult(), "3.88")
+        self.assertEqual(du.getResult(), "123.92")
 
 
 def test_suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(TestLactoscopeH23061316COMP))
+    suite.addTest(unittest.makeSuite(TestSomascopeH23061316SCC))
     return suite
