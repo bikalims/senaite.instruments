@@ -240,7 +240,7 @@ class SomascopeH23061316SCCParser(InstrumentResultsFileParser):
 
         keyword = "DU_SCC"
         try:
-            if not self.getDuplicateKeyord(sample_id, keyword)
+            if not self.getDuplicateKeyord(sample_id, keyword):
                 return 0
         except Exception as e:
             self.warn(
@@ -262,7 +262,7 @@ class SomascopeH23061316SCCParser(InstrumentResultsFileParser):
 
         keyword = "DU_SCC"
         try:
-            if not self.getReferenceSampleKeyword(sample_id, keyword)
+            if not self.getReferenceSampleKeyword(sample_id, keyword):
                 return 0
         except Exception as e:
             self.warn(
