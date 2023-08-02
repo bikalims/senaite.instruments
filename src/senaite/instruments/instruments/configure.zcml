@@ -122,4 +122,10 @@
     factory=".perkinelmer.lactoscope.lactoscopeh23061316.importer"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
 
+   <adapter
+    for="*"
+    name="somascopeh23061316scc_importer"
+    factory=".perkinelmer.somascope.somascopeh23061316scc.importer"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
 </configure>
