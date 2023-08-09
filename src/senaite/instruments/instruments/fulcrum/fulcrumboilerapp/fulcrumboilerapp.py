@@ -60,7 +60,7 @@ class AnalysisNotFound(Exception):
     pass
 
 
-class FulcrumAppParser(InstrumentResultsFileParser):
+class FulcrumBoilerAppParser(InstrumentResultsFileParser):
     ar = None
 
     def __init__(self, infile, worksheet=None, encoding=None, delimiter=None):
@@ -204,7 +204,7 @@ class FulcrumAppParser(InstrumentResultsFileParser):
 
     def get_results_values(self, row, row_nr, headers):
         barcode_ct = row[12]  # sample ID for other sample types M
-        barcode_boiler = row[77]  # Sample ID for boiler water BZ
+        barcode_boiler = row[81]  # Sample ID for boiler water CD
         if barcode_ct:
             results = {}  # ignore W and X,Y,AC
             sample_id = barcode_ct
@@ -223,7 +223,6 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             sample_id = barcode_boiler
             results = {}
             results[headers[80]] = row[80]  # CC
-            results[headers[81]] = row[81]  # CD Still to be added to Bika
             results[headers[82]] = row[82]  # CE
         else:
             # regular sample results
@@ -243,7 +242,6 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             no_id_results[headers[28]] = row[28]  # AC
             # boiler sample results
             no_id_results[headers[80]] = row[80]  # CC
-            no_id_results[headers[81]] = row[81]  # CD yet to be added to Bika
             no_id_results[headers[82]] = row[82]  # CE
             if any(no_id_results.values()):
                 self.warn(
@@ -406,9 +404,9 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             return None
 
 
-class fulcrumappimport(object):
+class fulcrumboilerappimport(object):
     implements(IInstrumentImportInterface, IInstrumentAutoImportInterface)
-    title = "FulcrumApp"
+    title = "Fulcrum Boiler App"
     __file__ = abspath(__file__)
 
     def __init__(self, context):
@@ -430,7 +428,7 @@ class fulcrumappimport(object):
         if not hasattr(infile, "filename"):
             errors.append(_("No file selected"))
 
-        parser = FulcrumAppParser(infile, worksheet=worksheet)
+        parser = FulcrumBoilerAppParser(infile, worksheet=worksheet)
         if parser:
             status = ["sample_received", "sample_due", "to_be_sampled"]
             over = [False, False]
