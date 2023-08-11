@@ -179,7 +179,7 @@ class FlameAtomicParser(InstrumentResultsFileParser):
         sample_service, lines = self.parse_headerlines(lines)
 
         for row_nr, row in enumerate(lines):
-            if 'Mthode:' in row[0]:
+            if "Mthode:" in row[0] or "Method:" in row[0]:
                 analysis_round = analysis_round + 1
             elif analysis_round > 0 and row[0]:
 
@@ -189,46 +189,50 @@ class FlameAtomicParser(InstrumentResultsFileParser):
         return 0
 
     def parse_row(self, row, sample_service, analysis_round, row_nr):
-        try:
-            row[8] = float(row[8])
-        except (TypeError, ValueError):
-            row[8] = 1
-        row[0] = row[0].replace(" ", "")
-
-        sample_ID = row[0]
+        sample_id = row[0]
         reading = row[1]
 
-        if not sample_ID or not reading:
+        if not sample_id or not reading:
             self.warn(
                 "Data not entered correctly for '{}' with sample ID '{}'"
                 " and result of '{}'".format(sample_service,
-                                             sample_ID, reading))
+                                             sample_id, reading))
             return 0
 
         # Here we check whether this sample ID has been processed already
-        if {sample_ID: sample_service} in self.processed_samples_class:
+        if {sample_id: sample_service} in self.processed_samples_class:
             msg = (
                 "Multiple results for Sample '{}' with sample service '{}'"
-                " found. Not imported".format(sample_ID, sample_service))
+                " found. Not imported".format(sample_id, sample_service))
             raise MultipleAnalysesFound(msg)
+
+        interim_keywords = self.get_interim_fields(sample_id)
         try:
-            if self.is_sample(sample_ID):
-                ar = self.get_ar(sample_ID)
+            if self.is_sample(sample_id):
+                ar = self.get_ar(sample_id)
                 analysis = self.get_analysis(ar, sample_service)
-                keyword = analysis.getKeyword
-            elif self.is_analysis_group_id(sample_ID):
-                analysis = self.get_duplicate_or_qc(sample_ID, sample_service)
-                keyword = analysis.getKeyword
+            elif self.is_analysis_group_id(sample_id):
+                analysis = self.get_duplicate_or_qc(sample_id, sample_service)
             else:
                 sample_reference = self.get_reference_sample(
-                        sample_ID, sample_service)
+                        sample_id, sample_service)
                 analysis = self.get_reference_sample_analysis(
                         sample_reference, sample_service)
-                keyword = analysis.getKeyword()
+            if not analysis:
+                keyword = self.process_interims(
+                        interim_keywords, sample_service, sample_id, reading)
+                if not keyword:
+                    # keyword = analysis.getKeyword  # Will throw error
+                    self.warn("No Analysis found for Sample {0} and keyword"
+                              " {1}. Results not imported".format(
+                                                sample_id, sample_service))
+                    return
+                else:
+                    return
         except Exception as e:
             self.warn(
                 msg="Error getting analysis for '${s}/${kw}': ${e}",
-                mapping={'s': sample_ID, 'kw': sample_service, 'e': repr(e)},
+                mapping={'s': sample_id, 'kw': sample_service, 'e': repr(e)},
                 numline=row_nr, line=str(row))
             return
 
@@ -237,15 +241,36 @@ class FlameAtomicParser(InstrumentResultsFileParser):
                 reading = 999999
             else:
                 return
-        self.processed_samples_class.append({sample_ID: sample_service})
-        self.parse_results(float(reading), keyword, sample_ID)
+        self.processed_samples_class.append({sample_id: sample_service})
+        self.parse_results(float(reading), keyword, sample_id)
         return
 
-    def parse_results(self, result, keyword, sample_ID):
+    def process_interims(self, interims, kw, sample_id, result):
+        as_kw = interims.get(kw)
+        if as_kw:
+            if len(as_kw) > 1:
+                self.warn("Duplicate keyword {0} found for Sample {1} and"
+                          " their results are not imported".format(
+                                                kw, sample_id))
+                return "Duplicate"
+            else:
+                self.processed_samples_class.append({sample_id: kw})
+                self.parse_interims(result, as_kw[0], kw, sample_id)
+                return as_kw[0]
+        else:
+            return
+
+    def parse_interims(self, result, as_kw, interim_kw, sample_id):
+        parsed = {}
+        parsed[interim_kw] = result
+        parsed.update({"DefaultResult": interim_kw})
+        self._addRawResult(sample_id, {as_kw: parsed})
+
+    def parse_results(self, result, keyword, sample_id):
         parsed = {}
         parsed["Reading"] = float(result)
         parsed.update({"DefaultResult": "Reading"})
-        self._addRawResult(sample_ID, {keyword: parsed})
+        self._addRawResult(sample_id, {keyword: parsed})
 
     @staticmethod
     def extract_relevant_data(lines):
@@ -288,12 +313,34 @@ class FlameAtomicParser(InstrumentResultsFileParser):
         return ascii_lines
 
     @staticmethod
+    def get_interim_fields(sample_id):
+        bc = api.get_tool(CATALOG_ANALYSIS_REQUEST_LISTING)
+        ar = bc(portal_type='AnalysisRequest', id=sample_id)
+        if len(ar) == 0:
+            ar = bc(
+                portal_type='AnalysisRequest', getClientSampleID=sample_id)
+        if len(ar) == 1:
+            obj = ar[0].getObject()
+            analyses = obj.getAnalyses(full_objects=True)
+            keywords = {}
+            for analysis_service in analyses:
+                for field in analysis_service.getInterimFields():
+                    interim_kw = field.get("keyword")
+                    as_kw = analysis_service.Keyword
+                    if interim_kw in keywords.keys():
+                        keywords[interim_kw].append(as_kw)
+                    else:
+                        keywords[interim_kw] = [as_kw]
+            return keywords
+        return {}
+
+    @staticmethod
     def parse_headerlines(lines):
         sample_service = []
         for row_nr, row in enumerate(lines):
             if row_nr == 5:
                 return sample_service, lines[5:]
-            if 'Mthodes' in row[0]:
+            if "Mthodes" in row[0] or "Methods" in row[0]:
                 # Determining how many rounds there are in the sheet (Max = 3)
                 if row[1]:
                     sample_service.append(row[1])
@@ -335,7 +382,7 @@ class FlameAtomicParser(InstrumentResultsFileParser):
 
     def get_analysis(self, ar, kw):
         analyses = self.get_analyses(ar)
-        analyses = [v for k, v in analyses.items() if k.startswith(kw)]
+        analyses = [v for k, v in analyses.items() if k == kw]
         if len(analyses) < 1:
             self.log(' No analysis found matching keyword {}'.format(kw))
             return None
@@ -368,7 +415,7 @@ class FlameAtomicParser(InstrumentResultsFileParser):
         brains = api.search(query, ANALYSIS_CATALOG)
         analyses = dict((a.getKeyword, a) for a in brains)
         brains = [
-                v for k, v in analyses.items() if k.startswith(sample_service)]
+                v for k, v in analyses.items() if k == sample_service]
         if len(brains) < 1:
             msg = (
                 " No analysis found matching Keyword {}".format(
@@ -403,7 +450,7 @@ class FlameAtomicParser(InstrumentResultsFileParser):
     def get_reference_sample_analysis(self, reference_sample, kw):
         kw = kw
         brains = self.get_reference_sample_analyses(reference_sample)
-        brains = [v for k, v in brains.items() if k.startswith(kw)]
+        brains = [v for k, v in brains.items() if k == kw]
         if len(brains) < 1:
             msg = " No analysis found matching Keyword {}".format(kw)
             raise AnalysisNotFound(msg)
