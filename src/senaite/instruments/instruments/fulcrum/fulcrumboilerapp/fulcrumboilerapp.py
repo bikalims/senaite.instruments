@@ -203,7 +203,7 @@ class FulcrumBoilerAppParser(InstrumentResultsFileParser):
         return 0
 
     def get_results_values(self, row, row_nr, headers):
-        barcode_ct = row[12]  # sample ID for other sample types M
+        barcode_ct = row[12]  # Sample ID for other sample types M
         barcode_boiler = row[81]  # Sample ID for boiler water CD
         if barcode_ct:
             results = {}  # ignore W and X,Y,AC
@@ -222,8 +222,9 @@ class FulcrumBoilerAppParser(InstrumentResultsFileParser):
         elif barcode_boiler:
             sample_id = barcode_boiler
             results = {}
-            results[headers[80]] = row[80]  # CC
-            results[headers[82]] = row[82]  # CE
+            results[headers[84]] = row[84]  # CG
+            results[headers[85]] = row[85]  # CH
+            results[headers[86]] = row[86]  # CI
         else:
             # regular sample results
             no_id_results = {}
@@ -239,10 +240,10 @@ class FulcrumBoilerAppParser(InstrumentResultsFileParser):
             no_id_results[headers[25]] = row[25]  # Z
             no_id_results[headers[26]] = row[26]  # AA
             no_id_results[headers[27]] = row[27]  # AB
-            no_id_results[headers[28]] = row[28]  # AC
             # boiler sample results
-            no_id_results[headers[80]] = row[80]  # CC
-            no_id_results[headers[82]] = row[82]  # CE
+            no_id_results[headers[84]] = row[84]  # CG
+            no_id_results[headers[85]] = row[85]  # CH
+            no_id_results[headers[86]] = row[86]  # CI
             if any(no_id_results.values()):
                 self.warn(
                         msg="No Sample ID was found for results on row '${r}'."
