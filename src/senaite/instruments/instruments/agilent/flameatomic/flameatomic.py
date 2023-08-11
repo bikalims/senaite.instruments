@@ -207,6 +207,7 @@ class FlameAtomicParser(InstrumentResultsFileParser):
             raise MultipleAnalysesFound(msg)
 
         interim_keywords = self.get_interim_fields(sample_id)
+        is_reference = False
         try:
             if self.is_sample(sample_id):
                 ar = self.get_ar(sample_id)
@@ -218,17 +219,22 @@ class FlameAtomicParser(InstrumentResultsFileParser):
                         sample_id, sample_service)
                 analysis = self.get_reference_sample_analysis(
                         sample_reference, sample_service)
+                is_reference = True
             if not analysis:
                 keyword = self.process_interims(
                         interim_keywords, sample_service, sample_id, reading)
                 if not keyword:
-                    # keyword = analysis.getKeyword  # Will throw error
                     self.warn("No Analysis found for Sample {0} and keyword"
                               " {1}. Results not imported".format(
                                                 sample_id, sample_service))
                     return
                 else:
                     return
+            if is_reference:
+                keyword = analysis.getKeyword()
+            else:
+                keyword = analysis.getKeyword
+
         except Exception as e:
             self.warn(
                 msg="Error getting analysis for '${s}/${kw}': ${e}",
