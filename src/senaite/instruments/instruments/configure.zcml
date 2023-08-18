@@ -41,12 +41,6 @@
 
     <adapter
     for="*"
-    name="fulcrumboilerapp_importer"
-    factory=".fulcrum.fulcrumboilerapp.fulcrumboilerapp.fulcrumboilerappimport"
-    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
-
-    <adapter
-    for="*"
     name="software_importer"
     factory=".bika.software.software.softwareimport"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
