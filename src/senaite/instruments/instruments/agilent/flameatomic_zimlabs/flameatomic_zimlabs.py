@@ -312,7 +312,7 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
             raise AnalysisNotFound(msg)
         brains = [
                 v for k,
-                v in analyses.items() if k.startswith(sample_service)]
+                v in analyses.items() if k == sample_service]
         if len(brains) < 1:
             msg = (" No analysis found matching Keyword {}".format(
                                                         sample_service))
