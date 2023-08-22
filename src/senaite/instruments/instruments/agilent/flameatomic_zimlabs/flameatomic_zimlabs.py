@@ -384,7 +384,7 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
 
 class flameatomiczimlabsimport(object):
     implements(IInstrumentImportInterface, IInstrumentAutoImportInterface)
-    title = "Flame Atomic Absorption Zimlabs"
+    title = "Agilent Flame Atomic Absorption Zimlabs"
     __file__ = abspath(__file__)
 
     def __init__(self, context):
