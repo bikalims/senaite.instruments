@@ -162,7 +162,6 @@ class FulcrumAppParser(InstrumentResultsFileParser):
         sample_id = row.get("sample_id")
         row.pop("sample_id")
         interim_keywords = self.get_interim_fields(sample_id)
-
         for sample_service in row.keys():
             reading = row.get(sample_service)
             if reading:
@@ -197,22 +196,17 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             reading, row_num, interim_keywords):
 
         portal_type = self.get_portal_type(sample_id)
-        analysis = ""  # will be updated in try block
         keyword = ""  # will be updated in try block
         try:
             if portal_type == "AnalysisRequest":
-                ar = self.get_ar(sample_id)
-                analysis = self.get_analysis(ar, sample_service)
-                keyword = analysis.getKeyword
-            elif portal_type in ["DuplicateAnalysis", "ReferenceAnalysis"]:
-                analysis = self.get_duplicate_or_qc(sample_id, sample_service)
-                keyword = analysis.getKeyword
-            elif portal_type == "ReferenceSample":
-                sample_reference = self.get_reference_sample(
+                keyword = self.get_ar_keyword(
                                     sample_id, sample_service)
-                analysis = self.get_reference_sample_analysis(
-                                    sample_reference, sample_service)
-                keyword = analysis.getKeyword()
+            elif portal_type in ["DuplicateAnalysis", "ReferenceAnalysis"]:
+                keyword = self.get_duplicate_keyword(
+                                    sample_id, sample_service)
+            elif portal_type == "ReferenceSample":
+                keyword = self.get_refernce_sample_keyword(
+                                    sample_id, sample_service)
             else:
                 self.warn(
                     msg="No Sample '${s}' found for results on row '${r}'."
@@ -222,28 +216,44 @@ class FulcrumAppParser(InstrumentResultsFileParser):
                 return "break"
 
         except Exception as e:
-            if not analysis:
+            if not keyword and interim_keywords:
                 keyword = self.process_interims(
                                 interim_keywords,
                                 sample_service,
                                 sample_id,
                                 reading
                             )
-                if not keyword:
-                    self.warn(
-                            msg="Error getting analysis for"
-                                " '${s}/${kw}': ${e}",
-                            mapping={
-                                's': sample_id,
-                                'kw': sample_service,
-                                'e': repr(e)},
-                            numline=str(row_num))
-                    return
-                else:
-                    return
-        if keyword:
-            self.parse_results(reading, keyword, sample_id)
+            if not keyword:
+                self.warn(
+                        msg="Error getting analysis for"
+                            " '${s}/${kw}': ${e}",
+                        mapping={
+                            's': sample_id,
+                            'kw': sample_service,
+                            'e': repr(e)},
+                        numline=str(row_num))
+            return
+        self.parse_results(reading, keyword, sample_id)
         return
+
+    def get_ar_keyword(self, sample_id, sample_service):
+        ar = self.get_ar(sample_id)
+        analysis = self.get_analysis(ar, sample_service)
+        keyword = analysis.getKeyword
+        return keyword
+
+    def get_duplicate_keyword(self, sample_id, sample_service):
+        analysis = self.get_duplicate_or_qc(sample_id, sample_service)
+        keyword = analysis.getKeyword
+        return keyword
+
+    def get_reference_sample_keyword(self, sample_id, sample_service):
+        sample_reference = self.get_reference_sample(
+                            sample_id, sample_service)
+        analysis = self.get_reference_sample_analysis(
+                            sample_reference, sample_service)
+        keyword = analysis.getKeyword()
+        return keyword
 
     def get_portal_type(self, sample_id):
         portal_type = None
