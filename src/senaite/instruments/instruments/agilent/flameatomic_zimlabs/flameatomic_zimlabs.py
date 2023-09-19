@@ -134,7 +134,8 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
         return kw, sample_id, result
 
     def parse_row(self, kw, sample_id, result, row_num):
-        interim_keywords = self.get_interim_fields(sample_id)
+        portal_type = self.get_portal_type(sample_id)
+        interim_keywords = self.get_interim_keywords(sample_id, portal_type)
         if {sample_id: kw} in self.processed_samples:
             msg = ("Multiple results for Sample '{}' "
                     "with analysis service '{}'"
@@ -148,15 +149,28 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
                         kw,
                         result,
                         row_num,
-                        interim_keywords
+                        interim_keywords,
+                        portal_type
         )
         return
 
+    def get_interim_keywords(self, sample_id, portal_type):
+        interim_keywords = {}
+        if portal_type == "AnalysisRequest":
+            interim_keywords = self.get_interim_fields(
+                    sample_id, portal_type)
+        elif portal_type in ["DuplicateAnalysis", "ReferenceAnalysis"]:
+            interim_keywords = self.get_qc_interim_fields(
+                    sample_id, portal_type)
+        elif portal_type == "ReferenceSample":
+            interim_keywords = self.get_reference_interim_fields(
+                    sample_id, portal_type)
+        return interim_keywords
+
     def try_getting_analysis(
             self, sample_id, sample_service,
-            reading, row_num, interim_keywords):
+            reading, row_num, interim_keywords, portal_type):
 
-        portal_type = self.get_portal_type(sample_id)
         analysis = ""  # will be updated in try block
         keyword = ""  # will be updated in try block
         try:
@@ -225,15 +239,57 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
         return True if brains else False
 
     @staticmethod
-    def get_interim_fields(sample_id):
+    def get_interim_fields(sample_id, portal_types):
         bc = api.get_tool(CATALOG_ANALYSIS_REQUEST_LISTING)
-        ar = bc(portal_type='AnalysisRequest', id=sample_id)
+        ar = bc(portal_type = portal_types, id=sample_id)
         if len(ar) == 0:
             ar = bc(
-                portal_type='AnalysisRequest', getClientSampleID=sample_id)
+                portal_type=portal_types, getClientSampleID=sample_id)
         if len(ar) == 1:
             obj = ar[0].getObject()
             analyses = obj.getAnalyses(full_objects=True)
+            keywords = {}
+            for analysis_service in analyses:
+                for field in analysis_service.getInterimFields():
+                    interim_kw = field.get("keyword")
+                    as_kw = analysis_service.Keyword
+                    if interim_kw in keywords.keys():
+                        keywords[interim_kw].append(as_kw)
+                    else:
+                        keywords[interim_kw] = [as_kw]
+            return keywords
+        return {}
+
+    @staticmethod
+    def get_qc_interim_fields(sample_id, portal_types):
+        query = dict(
+            portal_type=portal_types, getReferenceAnalysesGroupID=sample_id
+        )
+        brains = api.search(query, ANALYSIS_CATALOG)
+        if len(brains) > 0:
+            analyses = [a.getObject() for a in brains]
+            keywords = {}
+            for analysis_service in analyses:
+                for field in analysis_service.getInterimFields():
+                    interim_kw = field.get("keyword")
+                    as_kw = analysis_service.Keyword
+                    if interim_kw in keywords.keys():
+                        keywords[interim_kw].append(as_kw)
+                    else:
+                        keywords[interim_kw] = [as_kw]
+            return keywords
+        return {}
+
+    @staticmethod
+    def get_reference_interim_fields(sample_id, portal_types):
+        query = dict(
+            portal_type=portal_types, getId=sample_id
+        )
+        reference_sample = api.search(query, ANALYSIS_CATALOG)
+        if reference_sample:
+            brains = reference_sample.getObject().getReferenceAnalyses()
+        if len(brains) > 0:
+            analyses = [a.getObject() for a in brains]
             keywords = {}
             for analysis_service in analyses:
                 for field in analysis_service.getInterimFields():
