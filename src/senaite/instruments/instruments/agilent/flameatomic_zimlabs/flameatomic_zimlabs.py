@@ -135,13 +135,18 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
 
     def parse_row(self, kw, sample_id, result, row_num):
         portal_type = self.get_portal_type(sample_id)
+        if portal_type == "ReferenceSample":
+            self.warn(
+                msg="Reference Sample '${s}' found. Please type out fully"
+                    " the Reference Analysis ID",
+                mapping={'s': sample_id}
+                )
+            return
         interim_keywords = self.get_interim_keywords(sample_id, portal_type)
         if {sample_id: kw} in self.processed_samples:
             msg = ("Multiple results for Sample '{}' "
-                    "with analysis service '{}'"
-                    " found. Not imported".format(
-                                            sample_id,
-                                            kw))
+                   "with analysis service '{}'"
+                   " found. Not imported".format(sample_id, kw))
             raise MultipleAnalysesFound(msg)
             return
         success = self.try_getting_analysis(
@@ -159,11 +164,11 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
         if portal_type == "AnalysisRequest":
             interim_keywords = self.get_interim_fields(
                     sample_id, portal_type)
-        elif portal_type in ["DuplicateAnalysis", "ReferenceAnalysis"]:
-            interim_keywords = self.get_qc_interim_fields(
+        elif portal_type == "DuplicateAnalysis":
+            interim_keywords = self.get_duplicate_or_ref_interim_fields(
                     sample_id, portal_type)
-        elif portal_type == "ReferenceSample":
-            interim_keywords = self.get_reference_interim_fields(
+        elif portal_type == "ReferenceAnalysis":
+            interim_keywords = self.get_duplicate_or_ref_interim_fields(
                     sample_id, portal_type)
         return interim_keywords
 
@@ -178,15 +183,14 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
                 ar = self.get_ar(sample_id)
                 analysis = self.get_analysis(ar, sample_service)
                 keyword = analysis.getKeyword
-            elif portal_type in ["DuplicateAnalysis", "ReferenceAnalysis"]:
-                analysis = self.get_duplicate_or_qc(sample_id, sample_service)
+            elif portal_type == "DuplicateAnalysis":
+                analysis = self.get_duplicate_analysis(
+                        sample_id, sample_service)
                 keyword = analysis.getKeyword
-            elif portal_type == "ReferenceSample":
-                sample_reference = self.get_reference_sample(
-                                    sample_id, sample_service)
-                analysis = self.get_reference_sample_analysis(
-                                    sample_reference, sample_service)
-                keyword = analysis.getKeyword()
+            elif portal_type == "ReferenceAnalysis":
+                analysis = self.get_reference_analysis(
+                        sample_id, sample_service)
+                keyword = analysis.getKeyword
             else:
                 self.warn(
                     msg="No Sample '${s}' found for results on row '${r}'."
@@ -201,7 +205,7 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
                                 interim_keywords,
                                 sample_service,
                                 sample_id,
-                                reading
+                                reading,
                             )
                 if not keyword:
                     self.warn(
@@ -226,8 +230,10 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
             self.ar = ar
             self.analyses = self.get_analyses(ar)
             portal_type = ar.portal_type
-        elif self.is_analysis_group_id(sample_id):
+        elif self.is_analysis_group_id_duplicate(sample_id):
             portal_type = "DuplicateAnalysis"
+        elif self.is_analysis_group_id_reference(sample_id):
+            portal_type = "ReferenceAnalysis"
         elif self.is_reference_sample(sample_id):
             portal_type = "ReferenceSample"
         return portal_type
@@ -241,7 +247,7 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
     @staticmethod
     def get_interim_fields(sample_id, portal_types):
         bc = api.get_tool(CATALOG_ANALYSIS_REQUEST_LISTING)
-        ar = bc(portal_type = portal_types, id=sample_id)
+        ar = bc(portal_type=portal_types, id=sample_id)
         if len(ar) == 0:
             ar = bc(
                 portal_type=portal_types, getClientSampleID=sample_id)
@@ -261,33 +267,11 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
         return {}
 
     @staticmethod
-    def get_qc_interim_fields(sample_id, portal_types):
+    def get_duplicate_or_ref_interim_fields(sample_id, portal_types):
         query = dict(
             portal_type=portal_types, getReferenceAnalysesGroupID=sample_id
         )
-        brains = api.search(query, ANALYSIS_CATALOG)
-        if len(brains) > 0:
-            analyses = [a.getObject() for a in brains]
-            keywords = {}
-            for analysis_service in analyses:
-                for field in analysis_service.getInterimFields():
-                    interim_kw = field.get("keyword")
-                    as_kw = analysis_service.Keyword
-                    if interim_kw in keywords.keys():
-                        keywords[interim_kw].append(as_kw)
-                    else:
-                        keywords[interim_kw] = [as_kw]
-            return keywords
-        return {}
-
-    @staticmethod
-    def get_reference_interim_fields(sample_id, portal_types):
-        query = dict(
-            portal_type=portal_types, getId=sample_id
-        )
-        reference_sample = api.search(query, ANALYSIS_CATALOG)
-        if reference_sample:
-            brains = reference_sample.getObject().getReferenceAnalyses()
+        brains = api.search(query, "senaite_catalog_analysis")
         if len(brains) > 0:
             analyses = [a.getObject() for a in brains]
             keywords = {}
@@ -312,7 +296,8 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
                 return "Duplicate"
             else:
                 self.processed_samples.append({sample_id: kw})
-                self.parse_interims(result, as_kw[0], kw, sample_id)
+                self.parse_interims(
+                        result, as_kw[0], kw, sample_id)
                 return as_kw[0]
         else:
             return
@@ -337,13 +322,23 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
         return True if brains else False
 
     @staticmethod
-    def is_analysis_group_id(analysis_group_id):
-        portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
+    def is_analysis_group_id_duplicate(analysis_group_id):
+        portal_types = "DuplicateAnalysis"
         query = dict(
             portal_type=portal_types,
             getReferenceAnalysesGroupID=analysis_group_id
         )
-        brains = api.search(query, ANALYSIS_CATALOG)
+        brains = api.search(query, "senaite_catalog_analysis")
+        return True if brains else False
+
+    @staticmethod
+    def is_analysis_group_id_reference(analysis_group_id):
+        portal_types = "ReferenceAnalysis"
+        query = dict(
+            portal_type=portal_types,
+            getReferenceAnalysesGroupID=analysis_group_id
+        )
+        brains = api.search(query, "senaite_catalog_analysis")
         return True if brains else False
 
     @staticmethod
@@ -356,12 +351,12 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
             pass
 
     @staticmethod
-    def get_duplicate_or_qc(analysis_id, sample_service,):
-        portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
+    def get_duplicate_analysis(analysis_id, sample_service,):
+        portal_types = "DuplicateAnalysis"
         query = dict(
             portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id
         )
-        brains = api.search(query, ANALYSIS_CATALOG)
+        brains = api.search(query, "senaite_catalog_analysis")
         analyses = dict((a.getKeyword, a) for a in brains)
         if len(brains) < 1:
             msg = (" No sample found with ID {}".format(analysis_id))
@@ -380,43 +375,28 @@ class FlameAtomicZimlabsParser(InstrumentResultsFileParser):
         return brains[0]
 
     @staticmethod
-    def get_reference_sample(reference_sample_id, kw):
+    def get_reference_analysis(analysis_id, sample_service,):
+        portal_types = "ReferenceAnalysis"
         query = dict(
-            portal_type="ReferenceSample", getId=reference_sample_id
+            portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id
         )
-        brains = api.search(query, SENAITE_CATALOG)
+        brains = api.search(query, "senaite_catalog_analysis")
+        analyses = dict((a.getKeyword, a) for a in brains)
         if len(brains) < 1:
-            msg = ("No reference sample found with ID {}".format(
-                                                        reference_sample_id))
+            msg = (" No sample found with ID {}".format(analysis_id))
             raise AnalysisNotFound(msg)
-        brains = [v for k, v in brains.items() if k == kw]
+        brains = [
+                v for k,
+                v in analyses.items() if k == sample_service]
         if len(brains) < 1:
-            msg = " No analysis found matching Keyword {}".format(kw)
-            raise AnalysisNotFound(msg)
-        if len(brains) > 1:
-            msg = ("Multiple brains found matching Keyword {}".format(kw))
-            raise MultipleAnalysesFound(msg)
-        return brains[0]
-
-    def get_reference_sample_analysis(self, reference_sample, kw):
-        kw = kw
-        brains = self.get_reference_sample_analyses(reference_sample)
-        if len(brains) < 1:
-            msg = ("No sample found with ID {}".format(reference_sample))
-            raise AnalysisNotFound(msg)
-        brains = [v for k, v in brains.items() if k == kw]
-        if len(brains) < 1:
-            msg = ("No analysis found matching Keyword {}".format(kw))
+            msg = (" No analysis found matching Keyword {}".format(
+                                                        sample_service))
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
-            msg = ("Multiple brains found matching Keyword {}".format(kw))
+            msg = ("Multiple brains found matching Keyword {}".format(
+                                                        sample_service))
             raise MultipleAnalysesFound(msg)
         return brains[0]
-
-    @staticmethod
-    def get_reference_sample_analyses(reference_sample):
-        brains = reference_sample.getObject().getReferenceAnalyses()
-        return dict((a.getKeyword(), a) for a in brains)
 
     def get_analysis(self, ar, kw):
         analyses = self.get_analyses(ar)
