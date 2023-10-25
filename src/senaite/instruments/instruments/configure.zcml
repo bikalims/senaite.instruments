@@ -14,12 +14,17 @@
     factory=".agilent.flameatomic.flameatomic.flameatomicimport"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
 
-
    <adapter
     for="*"
     name="flameatomic_exporter"
     factory=".agilent.flameatomic.flameatomic.flameatomicexport"
     provides="senaite.core.exportimport.instruments.IInstrumentExportInterface"/>
+
+   <adapter
+    for="*"
+    name="flameatomic_zimlabs_importer"
+    factory=".agilent.flameatomic_zimlabs.flameatomic_zimlabs.flameatomiczimlabsimport"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
     
     <adapter
     for="*"
