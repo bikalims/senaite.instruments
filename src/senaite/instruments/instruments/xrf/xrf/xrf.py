@@ -20,10 +20,13 @@
 
 import json
 import traceback
-import re
 from os.path import abspath
+from re import subn
 from zope.interface import implements
 
+from bika.lims import api
+from senaite.core.catalog import SAMPLE_CATALOG
+from senaite.core.catalog import ANALYSIS_CATALOG, SENAITE_CATALOG
 from senaite.instruments import senaiteMessageFactory as _
 from senaite.core.exportimport.instruments import (
     IInstrumentAutoImportInterface,
@@ -78,7 +81,9 @@ class importer(object):
             if artoapply == "received":
                 status = ["sample_received"]
             elif artoapply == "received_tobeverified":
-                status = ["sample_received", "attachment_due", "to_be_verified"]
+                status = ["sample_received",
+                          "attachment_due",
+                          "to_be_verified"]
 
             over = [False, False]
             if override == "nooverride":
@@ -111,223 +116,249 @@ class importer(object):
 
 
 class XRFTXTParser2(InstrumentCSVResultsFileParser):
-
-    HEADERTABLE_KEY = '[Header]'
-    HEADERKEY_FILENAME = 'Data File Name'
-    HEADERKEY_OUTPUTDATE = 'Output Date'
-    HEADERKEY_OUTPUTTIME = 'Output Time'
-    QUANTITATIONRESULTS_KEY = '[MS Quantitative Results]'
-    QUANTITATIONRESULTS_NUMBEROFIDS = '# of IDs'
-    QUANTITATIONRESULTS_HEADER_ID_NUMBER = 'ID#'
-    QUANTITATIONRESULTS_NUMERICHEADERS = ('Mass', 'Height' 'Conc.',
-                                          'Std.Ret.Time', '3rd', '2nd', '1st',
-                                          'Constant', 'Ref.Ion Area',
-                                          'Ref.Ion Height',
-                                          'Ref.Ion Set Ratio',
-                                          'Ref.Ion Ratio', 'Recovery',
-                                          'SI', 'Ref.Ion1 m/z',
-                                          'Ref.Ion1 Area', 'Ref.Ion1 Height',
-                                          'Ref.Ion1 Set Ratio',
-                                          'Ref.Ion1 Ratio', 'Ref.Ion2 m/z',
-                                          'Ref.Ion2 Area', 'Ref.Ion2 Height',
-                                          'Ref.Ion2 Set Ratio',
-                                          'Ref.Ion2 Ratio', 'Ref.Ion3 m/z',
-                                          'Ref.Ion3 Area', 'Ref.Ion3 Height',
-                                          'Ref.Ion3 Set Ratio',
-                                          'Ref.Ion3 Ratio',
-                                          'Ref.Ion4 m/z', 'Ref.Ion4 Area',
-                                          'Ref.Ion4 Height',
-                                          'Ref.Ion4 Set Ratio',
-                                          'Ref.Ion4 Ratio', 'Ref.Ion5 m/z',
-                                          'Ref.Ion5 Area', 'Ref.Ion5 Height',
-                                          'Ref.Ion5 Set Ratio',
-                                          'Ref.Ion5 Ratio', 'S/N', 'Threshold',
-                                          )
-    SIMILARITYSEARCHRESULTS_KEY = \
-        '[MS Similarity Search Results for Identified Results]'
-    PEAK_TABLE_KEY = '[MC Peak Table]'
-    COMMAS = ','
+    HEADERTABLE = []
+    HEADERTABLE_DATA = []
+    COMMAS = '\t '
 
     def __init__(self, csv):
         InstrumentCSVResultsFileParser.__init__(self, csv)
         self._end_header = False
-        self._quantitationresultsheader = []
+        self._resultsheader = []
         self._numline = 0
 
     def _parseline(self, line):
         if self._end_header is False:
             return self.parse_headerline(line)
+        elif self._end_header and not self._resultsheader:
+            return self.parse_result_headerline(line)
         else:
-            return self.parse_quantitationesultsline(line)
+            return self.parse_resultsline(line)
 
     def parse_headerline(self, line):
-        r""" Parses header lines
-
-            Header example:
-            [Header]
-            Data File Name,C:\GCMSsolution\Data\October\
-                    1-16-02249-001_CD_10172016_2.qgd
-            Output Date,10/18/2016
-            Output Time,12:04:11 PM
         """
-        import pdb; pdb.set_trace()
+        """
         if self._end_header is True:
             # Header already processed
             return 0
 
-        splitted = [token.strip() for token in line.split('\t')]
+        splitted = [token.strip() for token in line.split(self.COMMAS)]
 
         # [Header]
-        if splitted[0] == self.HEADERTABLE_KEY:
-            if self.HEADERTABLE_KEY in self._header:
-                self.warn("Header [Header] Info already found. Discarding",
-                          numline=self._numline, line=line)
-                return 0
-
-            self._header[self.HEADERTABLE_KEY] = []
-            for i in range(len(splitted) - 1):
-                if splitted[i + 1]:
-                    self._header[self.HEADERTABLE_KEY].append(splitted[i + 1])
-
-        # Data File Name, C:\GCMSsolution\Data\October\
-        # 1-16-02249-001_CD_10172016_2.qgd
-        elif splitted[0] == self.HEADERKEY_FILENAME:
-            if self.HEADERKEY_FILENAME in self._header:
-                self.warn("Header File Data Name already found. Discarding",
-                          numline=self._numline, line=line)
-                return 0
-
-            if splitted[1]:
-                self._header[self.HEADERKEY_FILENAME] = splitted[1]
-            else:
-                self.warn("File Data Name not found or empty",
-                          numline=self._numline, line=line)
-
-        # Output Date	10/18/2016
-        elif splitted[0] == self.HEADERKEY_OUTPUTDATE:
-            if splitted[1]:
-                try:
-                    d = datetime.strptime(splitted[1], "%m/%d/%Y")
-                    self._header[self.HEADERKEY_OUTPUTDATE] = d
-                except ValueError:
-                    self.err("Invalid Output Date format",
-                             numline=self._numline, line=line)
-            else:
-                self.warn("Output Date not found or empty",
-                          numline=self._numline, line=line)
-                d = datetime.strptime(splitted[1], "%m/%d/%Y")
-
-        # Output Time	12:04:11 PM
-        elif splitted[0] == self.HEADERKEY_OUTPUTTIME:
-            if splitted[1]:
-                try:
-                    d = datetime.strptime(splitted[1], "%I:%M:%S %p")
-                    self._header[self.HEADERKEY_OUTPUTTIME] = d
-                except ValueError:
-                    self.err("Invalid Output Time format",
-                             numline=self._numline, line=line)
-            else:
-                self.warn("Output Time not found or empty",
-                          numline=self._numline, line=line)
-                d = datetime.strptime(splitted[1], "%I:%M %p")
-
-        if line.startswith(self.QUANTITATIONRESULTS_KEY):
-            self._end_header = True
-            if len(self._header) == 0:
-                self.err("No header found", numline=self._numline)
-                return -1
-            return 0
-
+        self._header = {item: '' for item in splitted}
+        self.HEADERTABLE = splitted
+        self._end_header = True
         return 0
 
-    def parse_quantitationesultsline(self, line):
+    def parse_result_headerline(self, line):
         """ Parses quantitation result lines
             Please see samples/GC-MS output.txt
             [MS Quantitative Results] section
         """
 
-        import pdb; pdb.set_trace()
-        # [MS Quantitative Results]
-        if line.startswith(self.QUANTITATIONRESULTS_KEY) \
-                or line.startswith(self.QUANTITATIONRESULTS_NUMBEROFIDS) \
-                or line.startswith(self.SIMILARITYSEARCHRESULTS_KEY) \
-                or line.startswith(self.PEAK_TABLE_KEY):
-
-            # Nothing to do, continue
-            return 0
-
-        # # of IDs \t23
-        if line.startswith(self.QUANTITATIONRESULTS_HEADER_ID_NUMBER):
-            self._quantitationresultsheader = [token.strip() for token
-                                               in line.split('\t')
-                                               if token.strip()]
-            return 0
-
-        # 1 \talpha-Pinene \tTarget \t0 \t93.00 \t7.738 \t7.680 \t7.795 \t2.480
-        # \t344488 \t138926 \t0.02604 \tAuto \t2	\t7.812	\tLinear \t0 \t0
-        # \t4.44061e+008	\t278569 \t0 \t0 \t38.94 \t38.58 \t0.00	\t98 \t92.00
-        # \t0 \t0 \t38.94 \t38.58 \t91.00 \t0 \t0 \t38.93 \t40.02 \t0 \t0 \t0
-        # \t0 \t0 \t0 \t0 #\t0 \t0 \t0 \t0 \t0 \t0 \t0 \t0 \t75.27 \tmg \t0.000
         splitted = [token.strip() for token in line.split('\t')]
-        ar_id = self._header['Data File Name'].split('\\')[-1].split('.')[0]
-        quantitation = {'DefaultResult': 'Conc.', 'AR': ar_id}
-        for colname in self._quantitationresultsheader:
-            quantitation[colname] = ''
+        if len(splitted[8:])/2 == len(self.HEADERTABLE):
+            self.HEADERTABLE_DATA = splitted
+            self._resultsheader = splitted
+            return 0
 
-        for i in range(len(splitted)):
-            token = splitted[i]
-            if i < len(self._quantitationresultsheader):
-                colname = self._quantitationresultsheader[i]
-                if colname in self.QUANTITATIONRESULTS_NUMERICHEADERS:
-                    try:
-                        quantitation[colname] = float(token)
-                    except ValueError:
-                        self.warn(
-                            "No valid number ${token} in column "
-                            "${index} (${column_name})",
-                            mapping={"token": token,
-                                     "index": str(i + 1),
-                                     "column_name": colname},
-                            numline=self._numline, line=line)
-                        quantitation[colname] = token
-                else:
-                    quantitation[colname] = token
+    def parse_resultsline(self, line):
+        splitted = [token.strip() for token in line.split('\t')]
+        sample_id = splitted[1]
+        portal_type = self.get_portal_type(sample_id)
+        if portal_type == "AnalysisRequest":
+            self.parse_ar_row(sample_id, line.line_num, splitted)
 
-                # val = re.sub(r"\W", "", splitted[1])
-                # self._addRawResult(quantitation['AR'],
-                #                   values={val:quantitation},
-                #                   override=False)
-            elif token:
-                self.err("Orphan value in column ${index} (${token})",
-                         mapping={"index": str(i+1),
-                                  "token": token},
-                         numline=self._numline, line=line)
+        elif portal_type in ["DuplicateAnalysis", "ReferenceAnalysis"]:
+            self.parse_duplicate_row(sample_id, line.line_num, splitted)
 
-        result = quantitation[quantitation['DefaultResult']]
-        column_name = quantitation['DefaultResult']
-        result = self.zeroValueDefaultInstrumentResults(column_name,
-                                                        result, line)
-        quantitation[quantitation['DefaultResult']] = result
+        elif portal_type == "ReferenceSample":
+            self.parse_reference_sample_row(sample_id, line.line_num, splitted)
+        else:
+            self.warn(
+                msg="No results found for '${sample_id}'",
+                mapping={"sample_id": sample_id},
+                numline=str(line.line_num),
+            )
+        return 0
 
-        val = re.sub(r"\W", "", splitted[1])
-        self._addRawResult(quantitation['AR'],
-                           values={val: quantitation},
-                           override=False)
+    def get_portal_type(self, sample_id):
+        portal_type = None
+        if self.is_sample(sample_id):
+            ar = self.get_ar(sample_id)
+            self.ar = ar
+            self.analyses = self.get_analyses(ar)
+            portal_type = ar.portal_type
+        elif self.is_analysis_group_id(sample_id):
+            portal_type = "DuplicateAnalysis"
+        elif self.is_reference_sample(sample_id):
+            portal_type = "ReferenceSample"
+        return portal_type
 
-    def zeroValueDefaultInstrumentResults(self, column_name, result, line):
-        result = str(result)
-        if result.startswith('--') or result == '' or result == 'ND':
-            return 0.0
+    def parse_row(self, row_nr, parsed, keyword):
+        parsed.update({"DefaultResult": "Mean"})
+        self._addRawResult(parsed.get("Name"), {keyword: parsed})
+        return 0
 
+    def parse_ar_row(self, sample_id, row_nr, row):
+        ar = self.get_ar(sample_id)
+        items = row.items()
+        parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
+
+        keyword = "DU_SCC"
         try:
-            result = float(result)
-            if result < 0.0:
-                result = 0.0
-        except ValueError:
-            self.err(
-                "No valid number ${result} in column (${column_name})",
-                mapping={"result": result,
-                         "column_name": column_name},
-                numline=self._numline, line=line)
+            analysis = self.get_analysis(ar, keyword)
+            if not analysis:
+                return 0
+        except Exception:
+            self.warn(
+                msg="Error getting analysis for '${kw}': ${sample_id}",
+                mapping={"kw": keyword, "sample_id": sample_id},
+                numline=row_nr,
+            )
             return
-        return result
+        return self.parse_row(row_nr, parsed, keyword)
+
+    def parse_duplicate_row(self, sample_id, row_nr, row):
+        items = row.items()
+        parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
+
+        keyword = "DU_SCC"
+        try:
+            if not self.getDuplicateKeyord(sample_id, keyword):
+                return 0
+        except Exception:
+            self.warn(
+                msg="Error getting analysis for '${kw}': ${sample_id}",
+                mapping={"kw": keyword, "sample_id": sample_id},
+                numline=row_nr,
+            )
+            return
+        return self.parse_row(row_nr, parsed, keyword)
+
+    def getDuplicateKeyord(self, sample_id, kw):
+        analysis = self.get_duplicate_or_qc_analysis(sample_id, kw)
+        return analysis.getKeyword
+
+    def parse_reference_sample_row(self, sample_id, row_nr, row):
+        items = row.items()
+        parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
+
+        keyword = "DU_SCC"
+        try:
+            if not self.getReferenceSampleKeyword(sample_id, keyword):
+                return 0
+        except Exception:
+            self.warn(
+                msg="Error getting analysis for '${kw}': ${sample_id}",
+                mapping={"kw": keyword, "sample_id": sample_id},
+                numline=row_nr,
+            )
+            return
+        return self.parse_row(row_nr, parsed, keyword)
+
+    def getReferenceSampleKeyword(self, sample_id, kw):
+        sample_reference = self.get_reference_sample(sample_id, kw)
+        analysis = self.get_reference_sample_analysis(sample_reference, kw)
+        return analysis.getKeyword()
+
+    def get_reference_sample_analysis(self, reference_sample, kw):
+        kw = kw
+        brains = self.get_reference_sample_analyses(reference_sample)
+        brains = [v for k, v in brains.items() if k == kw]
+        if len(brains) < 1:
+            lmsg = "No analysis found for sample {} matching Keyword {}"
+            msg = lmsg.format(reference_sample, kw)
+            raise AnalysisNotFound(msg)
+        if len(brains) > 1:
+            lmsg = "Multiple objects found for sample {} matching Keyword '{}'"
+            msg = lmsg.format(reference_sample, kw)
+            raise MultipleAnalysesFound(msg)
+        return brains[0]
+
+    @staticmethod
+    def get_reference_sample_analyses(reference_sample):
+        brains = reference_sample.getObject().getReferenceAnalyses()
+        return dict((a.getKeyword(), a) for a in brains)
+
+    @staticmethod
+    def get_duplicate_or_qc_analysis(analysis_id, kw):
+        portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
+        query = dict(portal_type=portal_types,
+                     getReferenceAnalysesGroupID=analysis_id)
+        brains = api.search(query, ANALYSIS_CATALOG)
+        analyses = dict((a.getKeyword, a) for a in brains)
+        brains = [v for k, v in analyses.items() if k == kw]
+        if len(brains) < 1:
+            lmsg = "No analysis found for sample {} matching Keyword {}"
+            msg = lmsg.format(analysis_id, kw)
+            raise AnalysisNotFound(msg)
+        if len(brains) > 1:
+            lmsg = "Multiple objects found for sample {} matching Keyword {}"
+            msg = lmsg.format(analysis_id, kw)
+            raise MultipleAnalysesFound(msg)
+        return brains[0]
+
+    @staticmethod
+    def get_ar(sample_id):
+        query = dict(portal_type="AnalysisRequest", getId=sample_id)
+        brains = api.search(query, SAMPLE_CATALOG)
+        try:
+            return api.get_object(brains[0])
+        except IndexError:
+            pass
+
+    @staticmethod
+    def is_sample(sample_id):
+        query = dict(portal_type="AnalysisRequest", getId=sample_id)
+        brains = api.search(query, SAMPLE_CATALOG)
+        return True if brains else False
+
+    @staticmethod
+    def get_analyses(ar):
+        analyses = ar.getAnalyses()
+        return dict((a.getKeyword, a) for a in analyses)
+
+    def get_analysis(self, ar, kw):
+        analyses = self.get_analyses(ar)
+        analyses = [v for k, v in analyses.items() if k == kw]
+        if len(analyses) < 1:
+            msg = "No analysis found for sample '${ar}' matching keyword '${kw}'"
+            self.log(msg, mapping=dict(kw=kw, ar=ar.getId()))
+            return None
+        if len(analyses) > 1:
+            self.warn(
+                'Multiple analyses found matching Keyword "${kw}"',
+                mapping=dict(kw=kw)
+            )
+            return None
+        return analyses[0]
+
+    @staticmethod
+    def is_analysis_group_id(analysis_group_id):
+        portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
+        query = dict(
+            portal_type=portal_types,
+            getReferenceAnalysesGroupID=analysis_group_id
+        )
+        brains = api.search(query, ANALYSIS_CATALOG)
+        return True if brains else False
+
+    @staticmethod
+    def is_reference_sample(reference_sample_id):
+        query = dict(portal_type="ReferenceSample", getId=reference_sample_id)
+        brains = api.search(query, SENAITE_CATALOG)
+        return True if brains else False
+
+    @staticmethod
+    def get_reference_sample(reference_sample_id, kw):
+        query = dict(portal_type="ReferenceSample", getId=reference_sample_id)
+        brains = api.search(query, SENAITE_CATALOG)
+        if len(brains) < 1:
+            lmsg = "No reference sample found for sample {} matching Keyword {}"
+            msg = lmsg.format(reference_sample_id, kw)
+            raise AnalysisNotFound(msg)
+        if len(brains) > 1:
+            lmsg = "Multiple objects found for sample {} matching Keyword {}"
+            msg = lmsg.format(reference_sample_id, kw)
+            raise MultipleAnalysesFound(msg)
+        return brains[0]
