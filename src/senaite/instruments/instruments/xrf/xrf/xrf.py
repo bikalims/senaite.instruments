@@ -164,20 +164,29 @@ class XRFTXTParser2(InstrumentCSVResultsFileParser):
     def parse_resultsline(self, line):
         splitted = [token.strip() for token in line.split('\t')]
         sample_id = splitted[1]
+        line_num = splitted[0]
+        results = splitted[8:]
+        values = [float(results[i]) for i in range(0, len(results), 2)]
+        data = dict(zip(self.HEADERTABLE, values))
+
         portal_type = self.get_portal_type(sample_id)
         if portal_type == "AnalysisRequest":
-            self.parse_ar_row(sample_id, line.line_num, splitted)
+            data["sample_id"] = sample_id
+            for keyword in data:
+                if keyword == "sample_id":
+                    continue
+                self.parse_ar_row(keyword, line_num, data)
 
         elif portal_type in ["DuplicateAnalysis", "ReferenceAnalysis"]:
-            self.parse_duplicate_row(sample_id, line.line_num, splitted)
+            self.parse_duplicate_row(sample_id, line_num, data)
 
         elif portal_type == "ReferenceSample":
-            self.parse_reference_sample_row(sample_id, line.line_num, splitted)
+            self.parse_reference_sample_row(sample_id, line_num, data)
         else:
             self.warn(
                 msg="No results found for '${sample_id}'",
                 mapping={"sample_id": sample_id},
-                numline=str(line.line_num),
+                numline=str(line_num),
             )
         return 0
 
@@ -195,16 +204,15 @@ class XRFTXTParser2(InstrumentCSVResultsFileParser):
         return portal_type
 
     def parse_row(self, row_nr, parsed, keyword):
-        parsed.update({"DefaultResult": "Mean"})
-        self._addRawResult(parsed.get("Name"), {keyword: parsed})
+        parsed.update({"DefaultResult": keyword})
+        self._addRawResult(parsed.get("sample_id"), {keyword: parsed})
         return 0
 
-    def parse_ar_row(self, sample_id, row_nr, row):
-        ar = self.get_ar(sample_id)
+    def parse_ar_row(self, keyword, row_nr, row):
+        ar = self.get_ar(row.get("sample_id"))
         items = row.items()
         parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
 
-        keyword = "DU_SCC"
         try:
             analysis = self.get_analysis(ar, keyword)
             if not analysis:

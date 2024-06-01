@@ -139,11 +139,9 @@ class BaseTestCase(PloneTestCase):
         return obj
 
     def add_manufacturer(self, **kwargs):
-        folder = self.portal.bika_setup.bika_manufacturers
+        folder = api.get_senaite_setup().manufacturers
         obj = _createObjectByType('Manufacturer', folder, tmpID())
         obj.edit(**kwargs)
-        obj.unmarkCreationFlag()
-        renameAfterCreation(obj)
         notify(ObjectInitializedEvent(obj))
         return obj
 
@@ -151,8 +149,6 @@ class BaseTestCase(PloneTestCase):
         folder = self.portal.bika_setup.bika_suppliers
         obj = _createObjectByType('Supplier', folder, tmpID())
         obj.edit(**kwargs)
-        obj.unmarkCreationFlag()
-        renameAfterCreation(obj)
         notify(ObjectInitializedEvent(obj))
         return obj
 
