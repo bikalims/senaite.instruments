@@ -17,6 +17,7 @@
 #
 # Copyright 2018-2021 by it's authors.
 # Some rights reserved, see README and LICENSE.
+# To run the test: ./bin/test -s senaite.instruments -t TestXRF
 
 import cStringIO
 from datetime import datetime
@@ -52,9 +53,9 @@ service_interims = []
 calculation_interims = []
 
 
-class TestKRF(DataTestCase):
+class TestXRF(DataTestCase):
     def setUp(self):
-        super(TestKRF, self).setUp()
+        super(TestXRF, self).setUp()
         setRoles(self.portal, TEST_USER_ID, ["Member", "LabManager"])
         login(self.portal, TEST_USER_NAME)
 
@@ -86,7 +87,10 @@ class TestKRF(DataTestCase):
             Prefix="DU",
         )
 
-    def test_import_xlsx(self):
+    def test_import_as(self):
+        """
+            Tests Analysis Service added on a sample
+        """
         ar = self.add_analysisrequest(
             self.client,
             dict(
@@ -99,8 +103,8 @@ class TestKRF(DataTestCase):
         )
         api.do_transition_for(ar, "receive")
         # worksheet - test breaks on worksheet when adding an attachment
-        # worksheet = self.add_worksheet(ar)
-        # duplicate = self.add_duplicate(worksheet)
+        worksheet = self.add_worksheet(ar)
+        duplicate = self.add_duplicate(worksheet)
         data = open(fn1, "rb").read()
         import_file = FileUpload(TestFile(cStringIO.StringIO(data), fn1))
         request = TestRequest(
@@ -115,12 +119,11 @@ class TestKRF(DataTestCase):
         )
         results = importer.Import(self.portal, request)
         so3 = ar.getAnalyses(full_objects=True, getKeyword="SO3")[0]
-        import pdb; pdb.set_trace()
         test_results = eval(results)  # noqa
         self.assertEqual(so3.getResult(), "2.285")
 
 
 def test_suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(TestKRF))
+    suite.addTest(unittest.makeSuite(TestXRF))
     return suite
