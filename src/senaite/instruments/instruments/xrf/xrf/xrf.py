@@ -170,24 +170,24 @@ class XRFTXTParser2(InstrumentCSVResultsFileParser):
         data = dict(zip(self.HEADERTABLE, values))
 
         portal_type = self.get_portal_type(sample_id)
-        if portal_type == "AnalysisRequest":
-            data["sample_id"] = sample_id
-            for keyword in data:
-                if keyword == "sample_id":
-                    continue
+        data["sample_id"] = sample_id
+
+        for keyword in data:
+            if keyword == "sample_id":
+                continue
+            if portal_type == "AnalysisRequest":
                 self.parse_ar_row(keyword, line_num, data)
 
-        elif portal_type in ["DuplicateAnalysis", "ReferenceAnalysis"]:
-            self.parse_duplicate_row(sample_id, line_num, data)
-
-        elif portal_type == "ReferenceSample":
-            self.parse_reference_sample_row(sample_id, line_num, data)
-        else:
-            self.warn(
-                msg="No results found for '${sample_id}'",
-                mapping={"sample_id": sample_id},
-                numline=str(line_num),
-            )
+            elif portal_type in ["DuplicateAnalysis", "ReferenceAnalysis"]:
+                self.parse_duplicate_row(keyword, line_num, data)
+            elif portal_type == "ReferenceSample":
+                self.parse_reference_sample_row(keyword, line_num, data)
+            else:
+                self.warn(
+                    msg="No results found for '${sample_id}'",
+                    mapping={"sample_id": sample_id},
+                    numline=str(line_num),
+                )
         return 0
 
     def get_portal_type(self, sample_id):
@@ -226,11 +226,11 @@ class XRFTXTParser2(InstrumentCSVResultsFileParser):
             return
         return self.parse_row(row_nr, parsed, keyword)
 
-    def parse_duplicate_row(self, sample_id, row_nr, row):
+    def parse_duplicate_row(self, keyword, row_nr, row):
         items = row.items()
         parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
+        sample_id = row.get("sample_id")
 
-        keyword = "DU_SCC"
         try:
             if not self.getDuplicateKeyord(sample_id, keyword):
                 return 0
@@ -247,11 +247,11 @@ class XRFTXTParser2(InstrumentCSVResultsFileParser):
         analysis = self.get_duplicate_or_qc_analysis(sample_id, kw)
         return analysis.getKeyword
 
-    def parse_reference_sample_row(self, sample_id, row_nr, row):
+    def parse_reference_sample_row(self, keyword, row_nr, row):
         items = row.items()
         parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
+        sample_id = row.get("sample_id")
 
-        keyword = "DU_SCC"
         try:
             if not self.getReferenceSampleKeyword(sample_id, keyword):
                 return 0

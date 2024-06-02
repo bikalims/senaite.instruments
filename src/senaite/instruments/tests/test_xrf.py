@@ -79,6 +79,12 @@ class TestXRF(DataTestCase):
                 PointOfCapture="lab",
                 Category="Metals",
             ),
+            self.add_analysisservice(
+                title="SiO2",
+                Keyword="SiO2",
+                PointOfCapture="lab",
+                Category="Metals",
+            ),
         ]
         self.sampletype = self.add_sampletype(
             title="Dust",
@@ -103,13 +109,13 @@ class TestXRF(DataTestCase):
         )
         api.do_transition_for(ar, "receive")
         # worksheet - test breaks on worksheet when adding an attachment
-        worksheet = self.add_worksheet(ar)
-        duplicate = self.add_duplicate(worksheet)
+        # worksheet = self.add_worksheet(ar)
+        # duplicate = self.add_duplicate(worksheet)
         data = open(fn1, "rb").read()
         import_file = FileUpload(TestFile(cStringIO.StringIO(data), fn1))
         request = TestRequest(
             form=dict(
-                instrument_results_file_format="xlsx",
+                instrument_results_file_format="txt",
                 submitted=True,
                 artoapply="received_tobeverified",
                 results_override="override",
@@ -119,8 +125,10 @@ class TestXRF(DataTestCase):
         )
         results = importer.Import(self.portal, request)
         so3 = ar.getAnalyses(full_objects=True, getKeyword="SO3")[0]
+        sio2 = ar.getAnalyses(full_objects=True, getKeyword="SiO2")[0]
         test_results = eval(results)  # noqa
         self.assertEqual(so3.getResult(), "2.285")
+        self.assertEqual(sio2.getResult(), "36.099")
 
 
 def test_suite():

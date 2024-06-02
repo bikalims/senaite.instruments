@@ -4,7 +4,6 @@
 #
 # Copyright 2018 by it's authors.
 
-from datetime import datetime
 
 import unittest2 as unittest
 from plone.app.testing import FunctionalTesting
@@ -17,12 +16,12 @@ from plone.app.testing import applyProfile
 from plone.app.testing import setRoles
 from plone.app.testing.bbb_at import PloneTestCase
 from plone.testing import z2
+from senaite.core.catalog import CONTACT_CATALOG
 from senaite.core.tests.layers import BASE_TESTING
 from senaite.core.tests.layers import DATA_TESTING
 
 from Products.Archetypes.event import ObjectInitializedEvent
 from Products.CMFPlone.utils import _createObjectByType
-from bika.lims import SETUP_CATALOG
 from bika.lims import api
 from bika.lims.idserver import renameAfterCreation
 from bika.lims.utils import tmpID
@@ -220,8 +219,8 @@ class BaseTestCase(PloneTestCase):
         wsfolder = self.portal.worksheets
         ws = _createObjectByType("Worksheet", wsfolder, tmpID())
         ws.processForm()
-        bsc = api.get_tool('senaite_catalog_setup')
-        lab_contacts = [o.getObject() for o in bsc(portal_type="LabContact")]
+        cat = api.get_tool(CONTACT_CATALOG)
+        lab_contacts = [o.getObject() for o in cat(portal_type="LabContact")]
         lab_contact = [o for o in lab_contacts if o.getUsername() == 'analyst1']
         self.assertEquals(len(lab_contact), 1)
         lab_contact = lab_contact[0]
