@@ -73,6 +73,8 @@ class importer(object):
         parser = None
         if not hasattr(infile, 'filename'):
             errors.append(_("No file selected"))
+        infile.filename =  infile.filename.replace("txt", "tsv")
+
         parser = XRFTXTParser2(infile)
 
         if parser:
