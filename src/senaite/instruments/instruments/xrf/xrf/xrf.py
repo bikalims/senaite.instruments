@@ -73,7 +73,7 @@ class importer(object):
         parser = None
         if not hasattr(infile, 'filename'):
             errors.append(_("No file selected"))
-        infile.filename =  infile.filename.replace("txt", "tsv")
+        infile.filename = infile.filename.replace("txt", "tsv")
 
         parser = XRFTXTParser2(infile)
 
@@ -211,7 +211,8 @@ class XRFTXTParser2(InstrumentCSVResultsFileParser):
         return 0
 
     def parse_ar_row(self, keyword, row_nr, row):
-        ar = self.get_ar(row.get("sample_id"))
+        sample_id = row.get("sample_id")
+        ar = self.get_ar(sample_id)
         items = row.items()
         parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
 
