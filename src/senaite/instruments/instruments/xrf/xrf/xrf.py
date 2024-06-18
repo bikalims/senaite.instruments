@@ -168,7 +168,7 @@ class XRFTXTParser2(InstrumentCSVResultsFileParser):
         sample_id = splitted[1]
         line_num = splitted[0]
         results = splitted[8:]
-        values = [float(results[i]) for i in range(0, len(results), 2)]
+        values = [results[i] for i in range(0, len(results), 2)]
         data = dict(zip(self.HEADERTABLE, values))
 
         portal_type = self.get_portal_type(sample_id)
