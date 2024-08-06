@@ -8,7 +8,7 @@ from bika.lims import bikaMessageFactory as _
 from senaite.core.exportimport.instruments import IInstrumentAutoImportInterface
 from senaite.core.exportimport.instruments import IInstrumentExportInterface
 from senaite.core.exportimport.instruments import IInstrumentImportInterface
-from senaite.core.exportimport.instruments.instrument import format_keyword
+from senaite.core.exportimport.instruments.utils import format_keyword
 from senaite.core.exportimport.instruments.resultsimport import AnalysisResultsImporter
 from senaite.core.exportimport.instruments.resultsimport import InstrumentCSVResultsFileParser
 from bika.lims.utils import t
@@ -177,7 +177,7 @@ class qualitativeimport(object):
             errors = importer.errors
             logs = importer.logs
             warns = importer.warns
-        except Exception as e:
+        except Exception:
             tbex = traceback.format_exc()
             errors.append(tbex)
 
@@ -245,7 +245,7 @@ class qualitativeexport(object):
                 'analysis_uid': getAdapter(item['analysis_uid'], ISuperModel),
                 'sample': getAdapter(item['container_uid'], ISuperModel)
             })
-        rows.sort(lambda a, b: cmp(a['cup'], b['cup']))
+        rows.sort(lambda a, b: cmp(a['cup'], b['cup']))  # noqa
 
         cnt = 0
         for row in rows:

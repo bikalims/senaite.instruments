@@ -6,7 +6,7 @@ from bika.lims import api
 from bika.lims import bikaMessageFactory as _
 from senaite.core.exportimport.instruments import IInstrumentAutoImportInterface
 from senaite.core.exportimport.instruments import IInstrumentImportInterface
-from senaite.core.exportimport.instruments.instrument import format_keyword
+from senaite.core.exportimport.instruments.utils import format_keyword
 from senaite.core.exportimport.instruments.resultsimport import AnalysisResultsImporter
 from bika.lims.utils import t
 from DateTime import DateTime
@@ -178,7 +178,7 @@ class aorcimport(object):
                 errors = importer.errors
                 logs = importer.logs
                 warns = importer.warns
-            except Exception as e:
+            except Exception:
                 tbex = traceback.format_exc()
                 errors.append(tbex)
 
