@@ -1,5 +1,5 @@
 <fieldset class="form-group">
-    <legend class="col-form-label-lg">S8 Tiger</legend>
+    <legend class="col-form-label-lg">SomaScope H230613-16 SCC</legend>
     <label for='instrument_results_file' class="text-muted">
         You can upload an XLS, XLSX, or CSV file.
     </label>

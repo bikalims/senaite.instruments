@@ -35,6 +35,7 @@ from senaite.core.exportimport.instruments.resultsimport import \
 from bika.lims import api
 from bika.lims import bikaMessageFactory as _
 from bika.lims.catalog import CATALOG_ANALYSIS_REQUEST_LISTING
+from senaite.core.catalog import ANALYSIS_CATALOG, SENAITE_CATALOG
 from senaite.instruments.instrument import FileStub
 from senaite.instruments.instrument import SheetNotFound
 from senaite.instruments.instrument import xls_to_csv
@@ -54,13 +55,14 @@ class AnalysisNotFound(Exception):
 class Winlab32(InstrumentResultsFileParser):
     ar = None
 
-    def __init__(self, infile, worksheet=None, encoding=None, delimiter=None):
+    def __init__(self, infile, encoding=None, delimiter=None):
         self.delimiter = delimiter if delimiter else ','
         self.encoding = encoding
         self.infile = infile
         self.csv_data = None
-        self.worksheet = worksheet if worksheet else 0
+        self.worksheet = 'Concentrations'
         self.sample_id = None
+        self.processed_samples = []
         mimetype, encoding = guess_type(self.infile.filename)
         InstrumentResultsFileParser.__init__(self, infile, mimetype)
 
@@ -101,10 +103,13 @@ class Winlab32(InstrumentResultsFileParser):
     def parse_row(self, row_nr, row):
         # convert row to use interim field names
         try:
-            value = float(row['Reported Conc (Calib)'])
+            value = float(row['Conc (Samp)'])
         except (TypeError, ValueError):
-            value = row['Reported Conc (Calib)']
-        parsed = {'reading': value, 'DefaultResult': 'reading'}
+            value = row['Conc (Samp)']
+        # reading and Reading - found out users can have Reading or reading
+        # when entering interim fields so we cater for both cases
+        parsed = {'Reading': value, 'DefaultResult': 'Reading', 'reading': value}
+        parsed.update(row)
 
         sample_id = subn(r'[^\w\d\-_]*', '', row.get('Sample ID', ""))[0]
         kw = subn(r"[^\w\d]*", "", row.get('Analyte Name', ""))[0]
@@ -113,9 +118,22 @@ class Winlab32(InstrumentResultsFileParser):
             return 0
 
         try:
-            ar = self.get_ar(sample_id)
-            brain = self.get_analysis(ar, kw)
-            new_kw = brain.getKeyword
+            if self.is_sample(sample_id):
+                if {sample_id: kw} in self.processed_samples:
+                    analysis = self.get_ar_duplicates(sample_id, kw)
+                    new_kw = analysis.getKeyword
+                else:
+                    self.processed_samples.append({sample_id: kw})
+                    ar = self.get_ar(sample_id)
+                    analysis = self.get_analysis(ar, kw)
+                    new_kw = analysis.getKeyword
+            elif self.is_analysis_group_id(sample_id):
+                analysis = self.get_duplicate_or_qc_analysis(sample_id, kw)
+                new_kw = analysis.getKeyword
+            else:
+                sample_reference = self.get_reference_sample(sample_id, kw)
+                analysis = self.get_reference_sample_analysis(sample_reference, kw)
+                new_kw = analysis.getKeyword()
         except Exception as e:
             self.warn(msg="Error getting analysis for '${s}/${kw}': ${e}",
                       mapping={'s': sample_id, 'kw': kw, 'e': repr(e)},
@@ -151,6 +169,86 @@ class Winlab32(InstrumentResultsFileParser):
             raise MultipleAnalysesFound(msg, kw=kw)
         return brains[0]
 
+    @staticmethod
+    def get_reference_sample_analyses(reference_sample):
+        brains = reference_sample.getObject().getReferenceAnalyses()
+        return dict((a.getKeyword(), a) for a in brains)
+
+    def get_reference_sample_analysis(self, reference_sample, kw):
+        kw = kw
+        brains = self.get_reference_sample_analyses(reference_sample)
+        brains = [v for k, v in brains.items() if k.startswith(kw)]
+        if len(brains) < 1:
+            msg = "No analysis found matching Keyword '${kw}'",
+            raise AnalysisNotFound(msg, kw=kw)
+        if len(brains) > 1:
+            msg = ("Multiple brains found matching Keyword '{}'".format(kw))
+            raise MultipleAnalysesFound(msg)
+        return brains[0]
+
+    @staticmethod
+    def is_sample(sample_id):
+        query = dict(portal_type="AnalysisRequest", getId=sample_id)
+        brains = api.search(query, CATALOG_ANALYSIS_REQUEST_LISTING)
+        return True if brains else False
+
+    @staticmethod
+    def is_analysis_group_id(analysis_group_id):
+        portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
+        query = dict(
+            portal_type=portal_types, getReferenceAnalysesGroupID=analysis_group_id
+        )
+        brains = api.search(query, ANALYSIS_CATALOG)
+        return True if brains else False
+
+    @staticmethod
+    def get_duplicate_or_qc_analysis(analysis_id, kw):
+        portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
+        query = dict(
+            portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id
+        )
+        brains = api.search(query, ANALYSIS_CATALOG)
+        analyses = dict((a.getKeyword, a) for a in brains)
+        brains = [v for k, v in analyses.items() if k.startswith(kw)]
+        if len(brains) < 1:
+            msg = ("No analysis found matching Keyword '${kw}'",)
+            raise AnalysisNotFound(msg, kw=kw)
+        if len(brains) > 1:
+            msg = ("Multiple brains found matching Keyword '${kw}'",)
+            raise MultipleAnalysesFound(msg, kw=kw)
+        return brains[0]
+
+    @staticmethod
+    def get_ar_duplicates(analysis_id, kw):
+        query = dict(portal_type="DuplicateAnalysis")
+        duplicates = api.search(query, ANALYSIS_CATALOG)
+        analyses = dict((a.getKeyword, [a, a.getReferenceAnalysesGroupID]) for a in duplicates)
+        brains = []
+        for k, v in analyses.items():
+            if k.startswith(kw) and v[1].startswith(analysis_id):
+                brains.append(v[0])
+        if len(brains) < 1:
+            msg = ("No analysis found matching Keyword '${kw}'",)
+            raise AnalysisNotFound(msg, kw=kw)
+        if len(brains) > 1:
+            msg = ("Multiple brains found matching Keyword '${kw}'",)
+            raise MultipleAnalysesFound(msg, kw=kw)
+        return brains[0]
+
+    @staticmethod
+    def get_reference_sample(reference_sample_id, kw):
+        query = dict(
+            portal_type="ReferenceSample", getId=reference_sample_id
+        )
+        brains = api.search(query, SENAITE_CATALOG)
+        if len(brains) < 1:
+            msg = ("No reference sample found matching Keyword '${kw}'",)
+            raise AnalysisNotFound(msg, kw=kw)
+        if len(brains) > 1:
+            msg = ("Multiple brains found matching Keyword '{kw}'".format(kw))
+            raise MultipleAnalysesFound(msg)
+        return brains[0]
+
 
 class importer(object):
     implements(IInstrumentImportInterface, IInstrumentAutoImportInterface)
@@ -173,10 +271,9 @@ class importer(object):
 
         artoapply = request.form['artoapply']
         override = request.form['results_override']
-        worksheet = request.form.get('worksheet', 0)
         instrument = request.form.get('instrument', None)
 
-        parser = Winlab32(infile, worksheet=worksheet)
+        parser = Winlab32(infile)
         if parser:
 
             status = ['sample_received', 'attachment_due', 'to_be_verified']

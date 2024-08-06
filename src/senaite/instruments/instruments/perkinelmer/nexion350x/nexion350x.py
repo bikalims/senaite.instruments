@@ -35,6 +35,7 @@ from senaite.core.exportimport.instruments.resultsimport import \
 from bika.lims import api
 from bika.lims import bikaMessageFactory as _
 from bika.lims.catalog import CATALOG_ANALYSIS_REQUEST_LISTING
+from senaite.core.catalog import ANALYSIS_CATALOG, SENAITE_CATALOG
 from senaite.instruments.instrument import FileStub
 from senaite.instruments.instrument import SheetNotFound
 from senaite.instruments.instrument import xls_to_csv
@@ -114,12 +115,6 @@ class Nexion350xParser(InstrumentResultsFileParser):
 
         # Get sample for this row
         sample_id = subn(r'[^\w\d\-_]*', '', row.get('Sample Id', ''))[0]
-        ar = self.get_ar(sample_id)
-        if not ar:
-            msg = 'Sample not found for {}'.format(sample_id)
-            self.warn(msg, numline=row_nr, line=str(row))
-            return 0
-        # Search for rows who's headers are analyte keys
         for key in row.keys():
             if key in non_analyte_row_headers:
                 continue
@@ -127,10 +122,25 @@ class Nexion350xParser(InstrumentResultsFileParser):
             if not kw:
                 continue
             try:
-                brain = self.get_analysis(ar, kw, row_nr=row_nr, row=row)
-                if not brain:
-                    continue
-                new_kw = brain.getKeyword
+                # Check for sample, duplicates and reference analysis(QC)
+                if self.is_sample(sample_id):
+                    ar = self.get_ar(sample_id)
+                    # Search for rows who's headers are analyte keys
+                    brain = self.get_analysis(ar, kw, row_nr=row_nr, row=row)
+                    if not brain:
+                        continue
+                    new_kw = brain.getKeyword
+                elif self.is_analysis_group_id(sample_id):
+                    analysis = self.get_duplicate_or_qc_analysis(sample_id, kw)
+                    new_kw = analysis.getKeyword
+                elif self.is_reference_sample(sample_id, kw):
+                    sample_reference = self.get_reference_sample(sample_id, kw)
+                    analysis = self.get_reference_sample_analysis(sample_reference, kw)
+                    new_kw = analysis.getKeyword()
+                else:
+                     msg = 'Sample not found for {}'.format(sample_id)
+                     self.warn(msg, numline=row_nr, line=str(row))
+                     return 0
                 parsed = dict(reading=float(row[key]), DefaultResult='reading')
                 self._addRawResult(sample_id, {new_kw: parsed})
             except (TypeError, ValueError):
@@ -150,6 +160,51 @@ class Nexion350xParser(InstrumentResultsFileParser):
             pass
 
     @staticmethod
+    def is_sample(sample_id):
+        query = dict(portal_type="AnalysisRequest", getId=sample_id)
+        brains = api.search(query, CATALOG_ANALYSIS_REQUEST_LISTING)
+        return True if brains else False
+
+    @staticmethod
+    def is_analysis_group_id(analysis_group_id):
+        portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
+        query = dict(
+            portal_type=portal_types, getReferenceAnalysesGroupID=analysis_group_id
+        )
+        brains = api.search(query, ANALYSIS_CATALOG)
+        return True if brains else False
+
+    @staticmethod
+    def get_duplicate_or_qc_analysis(analysis_id, kw):
+        portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
+        query = dict(
+            portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id
+        )
+        brains = api.search(query, ANALYSIS_CATALOG)
+        analyses = dict((a.getKeyword, a) for a in brains)
+        brains = [v for k, v in analyses.items() if k.startswith(kw)]
+        if len(brains) < 1:
+            msg = ("No analysis found matching Keyword '${kw}'",)
+            raise AnalysisNotFound(msg, kw=kw)
+        if len(brains) > 1:
+            msg = ("Multiple brains found matching Keyword '${kw}'",)
+            raise MultipleAnalysesFound(msg, kw=kw)
+        return brains[0]
+
+    def get_reference_sample_analysis(self, reference_sample, kw):
+        kw = kw
+        brains = self.get_reference_sample_analyses(reference_sample)
+        brains = [v for k, v in brains.items() if k.startswith(kw)]
+        if len(brains) < 1:
+            msg = "No analysis found matching Keyword '${kw}'",
+            raise AnalysisNotFound(msg, kw=kw)
+        if len(brains) > 1:
+            msg = ("Multiple brains found matching Keyword '{}'".format(kw))
+            raise MultipleAnalysesFound(msg)
+        return brains[0]
+
+
+    @staticmethod
     def get_analyses(ar):
         analyses = ar.getAnalyses()
         return dict((a.getKeyword, a) for a in analyses)
@@ -163,6 +218,28 @@ class Nexion350xParser(InstrumentResultsFileParser):
         if len(brains) > 1:
             msg = "Multiple brains found matching Keyword '${kw}'",
             raise MultipleAnalysesFound(msg, kw=kw)
+        return brains[0]
+
+    @staticmethod
+    def is_reference_sample(reference_sample_id, kw):
+        query = dict(
+            portal_type="ReferenceSample", getId=reference_sample_id
+        )
+        brains = api.search(query, SENAITE_CATALOG)
+        return True if brains else False
+
+    @staticmethod
+    def get_reference_sample(reference_sample_id, kw):
+        query = dict(
+            portal_type="ReferenceSample", getId=reference_sample_id
+        )
+        brains = api.search(query, SENAITE_CATALOG)
+        if len(brains) < 1:
+            msg = ("No reference sample found matching Keyword '${kw}'",)
+            raise AnalysisNotFound(msg, kw=kw)
+        if len(brains) > 1:
+            msg = ("Multiple brains found matching Keyword '{}'".format(kw))
+            raise MultipleAnalysesFound(msg)
         return brains[0]
 
 

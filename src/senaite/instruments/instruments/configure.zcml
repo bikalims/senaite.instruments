@@ -8,6 +8,48 @@
     factory=".agilent.chemstation.chemstation.chemstationimport"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
 
+   <adapter
+    for="*"
+    name="flameatomic_importer"
+    factory=".agilent.flameatomic.flameatomic.flameatomicimport"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
+   <adapter
+    for="*"
+    name="flameatomic_exporter"
+    factory=".agilent.flameatomic.flameatomic.flameatomicexport"
+    provides="senaite.core.exportimport.instruments.IInstrumentExportInterface"/>
+
+   <adapter
+    for="*"
+    name="flameatomic_zimlabs_importer"
+    factory=".agilent.flameatomic_zimlabs.flameatomic_zimlabs.flameatomiczimlabsimport"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+    
+    <adapter
+    for="*"
+    name="dr3900_importer"
+    factory=".hach.dr3900.dr3900.dr3900import"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
+    <adapter
+    for="*"
+    name="dr3900_exporter"
+    factory=".hach.dr3900.dr3900.dr3900export"
+    provides="senaite.core.exportimport.instruments.IInstrumentExportInterface"/>
+
+    <adapter
+    for="*"
+    name="fulcrumapp_importer"
+    factory=".fulcrum.fulcrumapp.fulcrumapp.fulcrumappimport"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
+    <adapter
+    for="*"
+    name="software_importer"
+    factory=".bika.software.software.softwareimport"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
 <!-- Incomplete ...
    <adapter
     for="*"
@@ -77,6 +119,24 @@
     for="*"
     name="nexion350x_importer"
     factory=".perkinelmer.nexion350x.nexion350x.importer"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
+   <adapter
+    for="*"
+    name="lactoscopeh23061316_importer"
+    factory=".perkinelmer.lactoscope.lactoscopeh23061316.importer"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
+   <adapter
+    for="*"
+    name="somascopeh23061316scc_importer"
+    factory=".perkinelmer.somascope.somascopeh23061316scc.importer"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
+   <adapter
+    for="*"
+    name="xrf_importer"
+    factory=".xrf.xrf.xrf.importer"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
 
 </configure>

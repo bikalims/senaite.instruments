@@ -4,7 +4,6 @@
 #
 # Copyright 2018 by it's authors.
 
-from datetime import datetime
 
 import unittest2 as unittest
 from plone.app.testing import FunctionalTesting
@@ -17,11 +16,12 @@ from plone.app.testing import applyProfile
 from plone.app.testing import setRoles
 from plone.app.testing.bbb_at import PloneTestCase
 from plone.testing import z2
+from senaite.core.catalog import CONTACT_CATALOG
 from senaite.core.tests.layers import BASE_TESTING
+from senaite.core.tests.layers import DATA_TESTING
 
 from Products.Archetypes.event import ObjectInitializedEvent
 from Products.CMFPlone.utils import _createObjectByType
-from bika.lims import SETUP_CATALOG
 from bika.lims import api
 from bika.lims.idserver import renameAfterCreation
 from bika.lims.utils import tmpID
@@ -138,11 +138,9 @@ class BaseTestCase(PloneTestCase):
         return obj
 
     def add_manufacturer(self, **kwargs):
-        folder = self.portal.bika_setup.bika_manufacturers
+        folder = api.get_senaite_setup().manufacturers
         obj = _createObjectByType('Manufacturer', folder, tmpID())
         obj.edit(**kwargs)
-        obj.unmarkCreationFlag()
-        renameAfterCreation(obj)
         notify(ObjectInitializedEvent(obj))
         return obj
 
@@ -150,8 +148,6 @@ class BaseTestCase(PloneTestCase):
         folder = self.portal.bika_setup.bika_suppliers
         obj = _createObjectByType('Supplier', folder, tmpID())
         obj.edit(**kwargs)
-        obj.unmarkCreationFlag()
-        renameAfterCreation(obj)
         notify(ObjectInitializedEvent(obj))
         return obj
 
@@ -217,3 +213,36 @@ class BaseTestCase(PloneTestCase):
 
     def add_analysisrequest(self, client, kwargs, services):
         return create_analysisrequest(client, self.request, kwargs, services)
+
+    def add_worksheet(self, ar, **kwargs):
+        # Worksheet creation
+        wsfolder = self.portal.worksheets
+        ws = _createObjectByType("Worksheet", wsfolder, tmpID())
+        ws.processForm()
+        cat = api.get_tool(CONTACT_CATALOG)
+        lab_contacts = [o.getObject() for o in cat(portal_type="LabContact")]
+        lab_contact = [o for o in lab_contacts if o.getUsername() == 'analyst1']
+        self.assertEquals(len(lab_contact), 1)
+        lab_contact = lab_contact[0]
+        ws.setAnalyst(lab_contact.getUsername())
+        ws.setResultsLayout(self.portal.bika_setup.getWorksheetLayout())
+        # Add analyses into the worksheet
+        self.request['context_uid'] = ws.UID()
+        for analysis in ar.getAnalyses():
+            ws.addAnalysis(analysis.getObject())
+        self.assertEquals(len(ws.getAnalyses()), 2)
+        return ws
+
+    def add_duplicate(self, worksheet, **kwargs):
+        # Add a duplicate for slot 1 (there's only one slot)
+        worksheet.addDuplicateAnalyses('1', None)
+        ans = worksheet.getAnalyses()
+        reg = [an for an in ans if an.portal_type == 'Analysis']
+        dup = [an for an in ans if an.portal_type == 'DuplicateAnalysis']
+        return dup
+
+
+class DataTestCase(BaseTestCase):
+    """Use for test cases which rely on the demo data
+    """
+    layer = DATA_TESTING
