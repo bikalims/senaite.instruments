@@ -8,7 +8,7 @@ from bika.lims import bikaMessageFactory as _
 from senaite.core.exportimport.instruments import IInstrumentAutoImportInterface
 from senaite.core.exportimport.instruments import IInstrumentExportInterface
 from senaite.core.exportimport.instruments import IInstrumentImportInterface
-from senaite.core.exportimport.instruments.instrument import format_keyword
+from senaite.core.exportimport.instruments.utils import format_keyword
 from senaite.core.exportimport.instruments.resultsimport import AnalysisResultsImporter
 from senaite.core.exportimport.instruments.resultsimport import InstrumentCSVResultsFileParser
 from bika.lims.utils import t
@@ -188,7 +188,7 @@ class quantitativeimport(object):
         importer = QuantitativeImporter(
             parser=parser,
             context=context,
-            allowed_ar_states=status,
+            allowed_sample_states=status,
             allowed_analysis_states=None,
             override=over,
             instrument_uid=instrument)

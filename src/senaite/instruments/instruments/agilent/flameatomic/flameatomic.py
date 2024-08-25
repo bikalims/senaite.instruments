@@ -186,7 +186,7 @@ class FlameAtomicParser(InstrumentResultsFileParser):
                 self.parse_row(
                     row, sample_service[analysis_round-1],
                     analysis_round, row_nr)
-        return 0
+        return 1
 
     def parse_row(self, row, sample_service, analysis_round, row_nr):
         sample_id = row[0]
@@ -510,7 +510,7 @@ class flameatomicimport(object):
             importer = AnalysisResultsImporter(
                 parser=parser,
                 context=context,
-                allowed_ar_states=status,
+                allowed_sample_states=status,
                 allowed_analysis_states=None,
                 override=over,
                 instrument_uid=instrument,

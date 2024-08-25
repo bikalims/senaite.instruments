@@ -152,7 +152,7 @@ class DR3900Parser(InstrumentResultsFileParser):
         if headers_parsed:
             for row in reader:
                 self.parse_row(row, reader.line_num)
-        return 0
+        return 1
 
     def parse_row(self, row, row_nr):
         parsed_strings = {}
@@ -414,7 +414,7 @@ class dr3900import(object):
             importer = AnalysisResultsImporter(
                 parser=parser,
                 context=context,
-                allowed_ar_states=status,
+                allowed_sample_states=status,
                 allowed_analysis_states=None,
                 override=over,
                 instrument_uid=instrument,

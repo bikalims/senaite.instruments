@@ -194,7 +194,7 @@ class SomascopeH23061316SCCParser(InstrumentResultsFileParser):
                     mapping={"sample_id": sample_id},
                     numline=str(reader.line_num),
                 )
-        return 0
+        return 1
 
     def get_portal_type(self, sample_id):
         portal_type = None
@@ -423,7 +423,7 @@ class importer(object):
             importer = AnalysisResultsImporter(
                 parser=parser,
                 context=context,
-                allowed_ar_states=status,
+                allowed_sample_states=status,
                 allowed_analysis_states=None,
                 override=over,
                 instrument_uid=instrument,

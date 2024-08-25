@@ -138,25 +138,23 @@ class BaseTestCase(PloneTestCase):
         return obj
 
     def add_manufacturer(self, **kwargs):
-        folder = api.get_senaite_setup().manufacturers
+        folder = self.portal.setup.manufacturers
         obj = _createObjectByType('Manufacturer', folder, tmpID())
         obj.edit(**kwargs)
         notify(ObjectInitializedEvent(obj))
         return obj
 
     def add_supplier(self, **kwargs):
-        folder = self.portal.bika_setup.bika_suppliers
+        folder = self.portal.setup.suppliers
         obj = _createObjectByType('Supplier', folder, tmpID())
         obj.edit(**kwargs)
         notify(ObjectInitializedEvent(obj))
         return obj
 
     def add_instrumenttype(self, **kwargs):
-        folder = self.portal.bika_setup.bika_instrumenttypes
+        folder = self.portal.setup.instrumenttypes
         obj = _createObjectByType('InstrumentType', folder, tmpID())
         obj.edit(**kwargs)
-        obj.unmarkCreationFlag()
-        renameAfterCreation(obj)
         notify(ObjectInitializedEvent(obj))
         return obj
 
@@ -170,11 +168,9 @@ class BaseTestCase(PloneTestCase):
         return obj
 
     def add_analysiscategory(self, **kwargs):
-        folder = self.portal.bika_setup.bika_analysiscategories
+        folder = self.portal.setup.analysiscategories
         obj = _createObjectByType('AnalysisCategory', folder, tmpID())
         obj.edit(**kwargs)
-        obj.unmarkCreationFlag()
-        renameAfterCreation(obj)
         notify(ObjectInitializedEvent(obj))
         return obj
 
@@ -237,7 +233,6 @@ class BaseTestCase(PloneTestCase):
         # Add a duplicate for slot 1 (there's only one slot)
         worksheet.addDuplicateAnalyses('1', None)
         ans = worksheet.getAnalyses()
-        reg = [an for an in ans if an.portal_type == 'Analysis']
         dup = [an for an in ans if an.portal_type == 'DuplicateAnalysis']
         return dup
 
