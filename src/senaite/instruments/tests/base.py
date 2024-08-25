@@ -4,7 +4,6 @@
 #
 # Copyright 2018 by it's authors.
 
-from datetime import datetime
 
 import unittest2 as unittest
 from plone.app.testing import FunctionalTesting
@@ -21,8 +20,6 @@ from senaite.core.tests.layers import BASE_TESTING
 
 from Products.Archetypes.event import ObjectInitializedEvent
 from Products.CMFPlone.utils import _createObjectByType
-from bika.lims import SETUP_CATALOG
-from bika.lims import api
 from bika.lims.idserver import renameAfterCreation
 from bika.lims.utils import tmpID
 from bika.lims.utils.analysisrequest import create_analysisrequest
@@ -138,29 +135,23 @@ class BaseTestCase(PloneTestCase):
         return obj
 
     def add_manufacturer(self, **kwargs):
-        folder = self.portal.bika_setup.bika_manufacturers
+        folder = self.portal.setup.manufacturers
         obj = _createObjectByType('Manufacturer', folder, tmpID())
         obj.edit(**kwargs)
-        obj.unmarkCreationFlag()
-        renameAfterCreation(obj)
         notify(ObjectInitializedEvent(obj))
         return obj
 
     def add_supplier(self, **kwargs):
-        folder = self.portal.bika_setup.bika_suppliers
+        folder = self.portal.setup.suppliers
         obj = _createObjectByType('Supplier', folder, tmpID())
         obj.edit(**kwargs)
-        obj.unmarkCreationFlag()
-        renameAfterCreation(obj)
         notify(ObjectInitializedEvent(obj))
         return obj
 
     def add_instrumenttype(self, **kwargs):
-        folder = self.portal.bika_setup.bika_instrumenttypes
+        folder = self.portal.setup.instrumenttypes
         obj = _createObjectByType('InstrumentType', folder, tmpID())
         obj.edit(**kwargs)
-        obj.unmarkCreationFlag()
-        renameAfterCreation(obj)
         notify(ObjectInitializedEvent(obj))
         return obj
 
@@ -174,11 +165,9 @@ class BaseTestCase(PloneTestCase):
         return obj
 
     def add_analysiscategory(self, **kwargs):
-        folder = self.portal.bika_setup.bika_analysiscategories
+        folder = self.portal.setup.analysiscategories
         obj = _createObjectByType('AnalysisCategory', folder, tmpID())
         obj.edit(**kwargs)
-        obj.unmarkCreationFlag()
-        renameAfterCreation(obj)
         notify(ObjectInitializedEvent(obj))
         return obj
 

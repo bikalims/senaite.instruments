@@ -167,7 +167,7 @@ class qualitativeimport(object):
         importer = QualitativeImporter(
             parser=parser,
             context=context,
-            allowed_ar_states=status,
+            allowed_sample_states=status,
             allowed_analysis_states=None,
             override=over,
             instrument_uid=instrument)
