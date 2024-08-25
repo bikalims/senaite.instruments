@@ -8,7 +8,7 @@ from bika.lims import bikaMessageFactory as _
 from senaite.core.exportimport.instruments import IInstrumentAutoImportInterface
 from senaite.core.exportimport.instruments import IInstrumentExportInterface
 from senaite.core.exportimport.instruments import IInstrumentImportInterface
-from senaite.core.exportimport.instruments.instrument import format_keyword
+from senaite.core.exportimport.instruments.utils import format_keyword
 from senaite.core.exportimport.instruments.resultsimport import AnalysisResultsImporter
 from bika.lims.utils import t
 from cStringIO import StringIO
