@@ -105,7 +105,7 @@ class Nexion350xParser(InstrumentResultsFileParser):
         reader = csv.DictReader(lines)
         for row in reader:
             self.parse_row(reader.line_num, row)
-        return 0
+        return True
 
     def parse_row(self, row_nr, row):
         if row['Sample Id'].lower().strip() in (

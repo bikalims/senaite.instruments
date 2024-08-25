@@ -137,13 +137,15 @@ class S8TigerParser(InstrumentResultsFileParser):
         reader = csv.DictReader(lines)
         for row in reader:
             self.parse_row(ar, reader.line_num, row)
-        return 0
+        return True
 
     def parse_row(self, ar, row_nr, row):
+        # commented out the the next 4 lines out becuase reading is not in
+        # field_interim_map in 47 where it is defined
         # convert row to use interim field names
-        if 'reading' not in field_interim_map.values():
-            self.err("Missing 'reading' interim field.")
-            return -1
+        # if 'reading' not in field_interim_map.values():
+        #     self.err("Missing 'reading' interim field.")
+        #     return -1
         parsed = {field_interim_map.get(k, ''): v for k, v in row.items()}
 
         formula = parsed.get('formula')
