@@ -177,7 +177,7 @@ class qualitativeimport(object):
             errors = importer.errors
             logs = importer.logs
             warns = importer.warns
-        except Exception as e:
+        except Exception:
             tbex = traceback.format_exc()
             errors.append(tbex)
 
@@ -245,7 +245,7 @@ class qualitativeexport(object):
                 'analysis_uid': getAdapter(item['analysis_uid'], ISuperModel),
                 'sample': getAdapter(item['container_uid'], ISuperModel)
             })
-        rows.sort(lambda a, b: cmp(a['cup'], b['cup']))
+        rows.sort(lambda a, b: cmp(a['cup'], b['cup']))  # noqa
 
         cnt = 0
         for row in rows:

@@ -74,7 +74,7 @@ class chemstationexport(object):
                             options['dilute_factor'],
                             ""])
             ARs_exported.append(p_uid)
-        tmprows.sort(lambda a, b: cmp(a[1], b[1]))
+        tmprows.sort(lambda a, b: cmp(a[1], b[1]))  # noqa
         rows += tmprows
 
         ramdisk = StringIO()
@@ -244,7 +244,7 @@ class chemstationimport(object):
                 errors = importer.errors
                 logs = importer.logs
                 warns = importer.warns
-            except Exception as e:
+            except Exception:
                 tbex = traceback.format_exc()
                 errors.append(tbex)
 
