@@ -1,6 +1,5 @@
 import types
 
-import openpyxl
 from openpyxl import load_workbook
 from senaite.core.exportimport.instruments.resultsimport import \
     InstrumentResultsFileParser
@@ -37,18 +36,20 @@ def xls_to_csv(infile, worksheet=0, delimiter=","):
             if value is None:
                 value = ""
             line.append(str(value))
-        print >> buffer, delimiter.join(line)
+        # print >> buffer, delimiter.join(line)
     buffer.seek(0)
     return buffer
+
 
 class SheetNotFound(Exception):
     """
     Sheet not found in workbook
     """
 
-def xlsx_to_csv(infile, worksheet=None, delimiter=","):
+
+def xlsx_to_csv(infile, worksheet=None, delimiter=",", data_only=True):
     worksheet = worksheet if worksheet else 0
-    wb = load_workbook(filename=infile)
+    wb = load_workbook(filename=infile, data_only=data_only)
     if worksheet in wb.sheetnames:
         sheet = wb[worksheet]
     else:
@@ -62,7 +63,7 @@ def xlsx_to_csv(infile, worksheet=None, delimiter=","):
     for row in sheet.rows:
         line = []
         for cell in row:
-            value = "" if cell.value is None else str(cell.value).encode("utf8")
+            value = "" if cell.value is None else str(cell.value).encode("utf8")  # noqa
             if "\n" in value:  # fixme multi-line cell gives only first line
                 value = value.split("\n")[0]
             line.append(value.strip())
@@ -85,18 +86,22 @@ class InstrumentXLSResultsFileParser(InstrumentResultsFileParser):
     """ Parser
     """
 
-    def __init__(self, infile, worksheet, encoding='xlsx', delimiter=None):
+    def __init__(self, infile, worksheet, encoding='xlsx', delimiter=None, data_only=False):  # noqa
         InstrumentResultsFileParser.__init__(self, infile, encoding.upper())
         # Convert xls to csv
         self._delimiter = delimiter if delimiter else "|"
+        self._worksheet = worksheet
         if encoding == 'xlsx':
             csv_data = xlsx_to_csv(
-                infile, worksheet=worksheet, delimiter=self._delimiter)
+                infile,
+                worksheet=worksheet,
+                delimiter=self._delimiter,
+                data_only=data_only)
         elif encoding == 'xls':
             csv_data = xls_to_csv(
                 infile, worksheet=worksheet, delimiter=self._delimiter)
 
-        # adpat csv_data into a FileUpload for parse method
+        # adapt csv_data into a FileUpload for parse method
         self._infile = infile
         stub = FileStub(file=csv_data, name=str(infile.filename))
         self._csvfile = FileUpload(stub)
@@ -106,8 +111,11 @@ class InstrumentXLSResultsFileParser(InstrumentResultsFileParser):
 
     def parse(self):
         infile = self._csvfile
-        self.log("Parsing file ${file_name}",
-                 mapping={"file_name": infile.filename})
+        self.log("Parsing worksheet '${worksheet}' of file '${file_name}'",
+                 mapping={
+                    "worksheet": self._worksheet,
+                    "file_name": infile.filename
+                 })
         jump = 0
         # We test in import functions if the file was uploaded
         try:
