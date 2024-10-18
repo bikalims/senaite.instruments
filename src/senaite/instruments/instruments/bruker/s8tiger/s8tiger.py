@@ -210,7 +210,7 @@ class S8TigerParser(InstrumentResultsFileParser):
         elif portal_type == "ReferenceSample":
             for row in reader:
                 self.parse_reference_sample_row(sample_id, reader.line_num, row)
-        return 0
+        return 1
 
     def get_portal_type(self, sample_id):
         portal_type = None
@@ -261,7 +261,6 @@ class S8TigerParser(InstrumentResultsFileParser):
         ar = self.get_ar(sample_id)
         # convert row to use interim field names
         parsed = {field_interim_map.get(k, ""): v for k, v in row.items()}
-
         formula = parsed.get("formula")
         kw = subn(r'[^\w\d\-_]*', '', formula)[0]
         try:
@@ -447,7 +446,7 @@ class importer(object):
             importer = AnalysisResultsImporter(
                 parser=parser,
                 context=context,
-                allowed_ar_states=status,
+                allowed_sample_states=status,
                 allowed_analysis_states=None,
                 override=over,
                 instrument_uid=instrument,

@@ -123,7 +123,7 @@ class SoftwareParser(InstrumentResultsFileParser):
         comments_lines = self.decode_read_data(comments_data, ext)
         sample_comments = self.comments_parser(comments_lines)
         self.results_parser(lines, sample_comments)
-        return 0
+        return 1
 
     def comments_parser(self, data):
         sample_comments = {}
@@ -431,7 +431,7 @@ class softwareimport(object):
             importer = AnalysisResultsImporter(
                 parser=parser,
                 context=context,
-                allowed_ar_states=status,
+                allowed_sample_states=status,
                 allowed_analysis_states=None,
                 override=over,
                 instrument_uid=instrument,

@@ -113,7 +113,7 @@ class FulcrumAppParser(InstrumentResultsFileParser):
             results = self.get_result_values(row, reader.line_num)
             if results:
                 self.parse_row(results, reader.line_num)
-        return 0
+        return 1
 
     def get_result_values(self, results, row_num):
         condenser = [
@@ -474,7 +474,7 @@ class fulcrumappimport(object):
             importer = AnalysisResultsImporter(
                 parser=parser,
                 context=context,
-                allowed_ar_states=status,
+                allowed_sample_states=status,
                 allowed_analysis_states=analysis_states,
                 override=over,
                 instrument_uid=instrument,

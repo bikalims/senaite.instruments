@@ -98,7 +98,7 @@ class Winlab32(InstrumentResultsFileParser):
         reader = csv.DictReader(lines)
         for row in reader:
             self.parse_row(reader.line_num, row)
-        return 0
+        return True
 
     def parse_row(self, row_nr, row):
         # convert row to use interim field names
@@ -293,7 +293,7 @@ class importer(object):
             importer = AnalysisResultsImporter(
                 parser=parser,
                 context=context,
-                allowed_ar_states=status,
+                allowed_sample_states=status,
                 allowed_analysis_states=None,
                 override=over,
                 instrument_uid=instrument)
