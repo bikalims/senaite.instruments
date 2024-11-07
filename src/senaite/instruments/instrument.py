@@ -36,7 +36,7 @@ def xls_to_csv(infile, worksheet=0, delimiter=","):
             if value is None:
                 value = ""
             line.append(str(value))
-        # print >> buffer, delimiter.join(line)
+        print >> buffer, delimiter.join(line)
     buffer.seek(0)
     return buffer
 
