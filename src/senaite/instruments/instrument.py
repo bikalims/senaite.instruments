@@ -36,7 +36,7 @@ def xls_to_csv(infile, worksheet=0, delimiter=","):
             if value is None:
                 value = ""
             line.append(str(value))
-        print >> buffer, delimiter.join(line)
+        print >> buffer, delimiter.join(line)  # noqa
     buffer.seek(0)
     return buffer
 
@@ -47,17 +47,17 @@ class SheetNotFound(Exception):
     """
 
 
-def xlsx_to_csv(infile, worksheet=None, delimiter=",", data_only=True):
-    worksheet = worksheet if worksheet else 0
+def xlsx_to_csv(infile, worksheet=0, delimiter=",", data_only=True):
     wb = load_workbook(filename=infile, data_only=data_only)
-    if worksheet in wb.sheetnames:
-        sheet = wb[worksheet]
-    else:
-        try:
-            index = int(worksheet)
-            sheet = wb.worksheets[index]
-        except (ValueError, TypeError, IndexError):
-            raise SheetNotFound
+
+    if isinstance(worksheet, int):
+        if worksheet >= len(wb.sheetnames):
+            return
+        worksheet = wb.sheetnames[worksheet]
+    if worksheet not in wb.sheetnames:
+        return
+
+    sheet = wb[worksheet]
 
     buffer = StringIO()
     for row in sheet.rows:
@@ -86,7 +86,7 @@ class InstrumentXLSResultsFileParser(InstrumentResultsFileParser):
     """ Parser
     """
 
-    def __init__(self, infile, worksheet, encoding='xlsx', delimiter=None, data_only=False):  # noqa
+    def __init__(self, infile, worksheet=0, encoding='xlsx', delimiter=None, data_only=False): # noqa
         InstrumentResultsFileParser.__init__(self, infile, encoding.upper())
         # Convert xls to csv
         self._delimiter = delimiter if delimiter else "|"
@@ -101,6 +101,12 @@ class InstrumentXLSResultsFileParser(InstrumentResultsFileParser):
             csv_data = xls_to_csv(
                 infile, worksheet=worksheet, delimiter=self._delimiter)
 
+        if not csv_data:
+            self._infile = None
+            self._csvfile = None
+            self.err("Could not load worksheet {}".format(worksheet)) # noqa
+            return
+
         # adapt csv_data into a FileUpload for parse method
         self._infile = infile
         stub = FileStub(file=csv_data, name=str(infile.filename))
@@ -110,6 +116,9 @@ class InstrumentXLSResultsFileParser(InstrumentResultsFileParser):
         self._end_header = False
 
     def parse(self):
+        if self._csvfile is None:
+            return True
+
         infile = self._csvfile
         self.log("Parsing worksheet '${worksheet}' of file '${file_name}'",
                  mapping={
