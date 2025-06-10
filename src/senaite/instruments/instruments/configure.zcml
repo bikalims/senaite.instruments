@@ -135,6 +135,12 @@
 
    <adapter
     for="*"
+    name="syngistix_importer"
+    factory=".perkinelmer.syngistix.syngistix.importer"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
+   <adapter
+    for="*"
     name="xrf_importer"
     factory=".xrf.xrf.xrf.importer"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
