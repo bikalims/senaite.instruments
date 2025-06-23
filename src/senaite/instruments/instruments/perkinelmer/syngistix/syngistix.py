@@ -177,23 +177,30 @@ class SyngistixParser(InstrumentResultsFileParser):
         portal_type = ""
         lines = self.csv_data.readlines()
         reader = csv.DictReader(lines)
+        results = []
         for row in reader:
-            sample_id = row.get("Name", "")
+            new_row = self.remove_unwanted_columns(row)
+            results.append(new_row)
+
+        row_num = 2
+        for row in results:
+            sample_id = row.get("Sample Id", "")
+            del row["Sample Id"]
             portal_type = self.get_portal_type(sample_id)
             if portal_type == "AnalysisRequest":
-                self.parse_ar_row(sample_id, reader.line_num, row)
-
+                self.parse_ar_row(sample_id, row_num, row)
             elif portal_type in ["DuplicateAnalysis", "ReferenceAnalysis"]:
-                self.parse_duplicate_row(sample_id, reader.line_num, row)
+                self.parse_duplicate_row(sample_id, row_num, row)
 
             elif portal_type == "ReferenceSample":
-                self.parse_reference_sample_row(sample_id, reader.line_num, row)
+                self.parse_reference_sample_row(sample_id, row_num, row)
             else:
                 self.warn(
                     msg="No results found for '${sample_id}'",
                     mapping={"sample_id": sample_id},
                     numline=str(reader.line_num),
                 )
+            row_num = row_num + 1
         return 1
 
     def get_portal_type(self, sample_id):
@@ -209,29 +216,31 @@ class SyngistixParser(InstrumentResultsFileParser):
             portal_type = "ReferenceSample"
         return portal_type
 
-    def parse_row(self, row_nr, parsed, keyword):
-        parsed.update({"DefaultResult": "Mean"})
-        self._addRawResult(parsed.get("Name"), {keyword: parsed})
+    def parse_row(self, row_nr, parsed, sample_id):
+        parsed.update({"DefaultResult": "Reading"})
+        self._addRawResult(sample_id, parsed)
         return 0
 
     def parse_ar_row(self, sample_id, row_nr, row):
         ar = self.get_ar(sample_id)
         items = row.items()
+        edited_items = {k.split(" ", 1)[0]: v for k, v in items if k}
+        items = edited_items.items()
         parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
-
-        keyword = "DU_SCC"
-        try:
-            analysis = self.get_analysis(ar, keyword)
-            if not analysis:
-                return 0
-        except Exception as e:
-            self.warn(
-                msg="Error getting analysis for '${kw}': ${sample_id}",
-                mapping={"kw": keyword, "sample_id": sample_id},
-                numline=row_nr,
-            )
-            return
-        return self.parse_row(row_nr, parsed, keyword)
+        for item in items:
+            keyword = item[0]
+            try:
+                analysis = self.get_analysis(ar, keyword)
+                if not analysis:
+                    del parsed[keyword]
+            except Exception as e:
+                self.warn(
+                    msg="Error getting analysis for '${kw}': ${sample_id}",
+                    mapping={"kw": keyword, "sample_id": sample_id},
+                    numline=row_nr,
+                )
+                del parsed[keyword]
+        return self.parse_row(row_nr, parsed, sample_id)
 
     def parse_duplicate_row(self, sample_id, row_nr, row):
         items = row.items()
@@ -378,6 +387,16 @@ class SyngistixParser(InstrumentResultsFileParser):
             msg = lmsg.format(reference_sample_id, kw)
             raise MultipleAnalysesFound(msg)
         return brains[0]
+
+    def remove_unwanted_columns(self, row):
+        del row["R"]
+        del row["Acquisition Time"]
+        del row["A/S Loc"]
+        del row["QC Status"]
+        del row["Dataset File"]
+        del row["Method File"]
+        del row[""]
+        return row
 
 
 class importer(object):
