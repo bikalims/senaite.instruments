@@ -239,7 +239,7 @@ class SyngistixParser(InstrumentResultsFileParser):
                 analysis = self.get_analysis(ar, keyword)
                 if not analysis:
                     del parsed[keyword]
-            except Exception as e:
+            except Exception:
                 self.warn(
                     msg="Error getting analysis for '${kw}': ${sample_id}",
                     mapping={"kw": keyword, "sample_id": sample_id},
@@ -256,7 +256,7 @@ class SyngistixParser(InstrumentResultsFileParser):
         try:
             if not self.getDuplicateKeyord(sample_id, keyword):
                 return 0
-        except Exception as e:
+        except Exception:
             self.warn(
                 msg="Error getting analysis for '${kw}': ${sample_id}",
                 mapping={"kw": keyword, "sample_id": sample_id},
@@ -277,7 +277,7 @@ class SyngistixParser(InstrumentResultsFileParser):
         try:
             if not self.getReferenceSampleKeyword(sample_id, keyword):
                 return 0
-        except Exception as e:
+        except Exception:
             self.warn(
                 msg="Error getting analysis for '${kw}': ${sample_id}",
                 mapping={"kw": keyword, "sample_id": sample_id},
