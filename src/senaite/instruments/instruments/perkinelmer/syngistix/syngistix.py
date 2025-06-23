@@ -131,10 +131,14 @@ class SyngistixParser(InstrumentResultsFileParser):
                 cellval = new_val if new_val else cell.value
 
                 try:
-                    value = "" if cellval is None else str(cellval).encode("utf8")
+                    value = (
+                        "" if cellval is None else str(cellval).encode("utf8")
+                    )
                 except UnicodeEncodeError:
                     value = (
-                        "" if cellval is None else safe_unicode(cellval).encode("utf8")
+                        ""
+                        if cellval is None
+                        else safe_unicode(cellval).encode("utf8")
                     )
                 if "\n" in value:  # fixme multi-line cell gives only 1st line
                     value = value.split("\n")[0]
@@ -164,7 +168,9 @@ class SyngistixParser(InstrumentResultsFileParser):
                     )
                     break
                 except SheetNotFound:
-                    self.err("Sheet not found in workbook: %s" % self.worksheet)
+                    self.err(
+                        "Sheet not found in workbook: %s" % self.worksheet
+                    )
                     return -1
                 except Exception as e:  # noqa
                     pass
@@ -226,7 +232,7 @@ class SyngistixParser(InstrumentResultsFileParser):
         items = row.items()
         edited_items = {k.split(" ", 1)[0]: v for k, v in items if k}
         items = edited_items.items()
-        parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
+        parsed = {subn(r"[^\w\d\-_]*", "", k)[0]: v for k, v in items if k}
         for item in items:
             keyword = item[0]
             try:
@@ -244,8 +250,7 @@ class SyngistixParser(InstrumentResultsFileParser):
 
     def parse_duplicate_row(self, sample_id, row_nr, row):
         items = row.items()
-        parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
-
+        parsed = {subn(r"[^\w\d\-_]*", "", k)[0]: v for k, v in items if k}
 
         keyword = "DU_SCC"
         try:
@@ -266,8 +271,7 @@ class SyngistixParser(InstrumentResultsFileParser):
 
     def parse_reference_sample_row(self, sample_id, row_nr, row):
         items = row.items()
-        parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
-
+        parsed = {subn(r"[^\w\d\-_]*", "", k)[0]: v for k, v in items if k}
 
         keyword = "DU_SCC"
         try:
@@ -281,7 +285,6 @@ class SyngistixParser(InstrumentResultsFileParser):
             )
             return
         return self.parse_row(row_nr, parsed, keyword)
-
 
     def getReferenceSampleKeyword(self, sample_id, kw):
         sample_reference = self.get_reference_sample(sample_id, kw)
@@ -310,7 +313,9 @@ class SyngistixParser(InstrumentResultsFileParser):
     @staticmethod
     def get_duplicate_or_qc_analysis(analysis_id, kw):
         portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
-        query = dict(portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id)
+        query = dict(
+            portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id
+        )
         brains = api.search(query, ANALYSIS_CATALOG)
         analyses = dict((a.getKeyword, a) for a in brains)
         brains = [v for k, v in analyses.items() if k == kw]
@@ -348,12 +353,15 @@ class SyngistixParser(InstrumentResultsFileParser):
         analyses = self.get_analyses(ar)
         analyses = [v for k, v in analyses.items() if k == kw]
         if len(analyses) < 1:
-            msg = """No analysis found for sample '${ar}' matching keyword '${kw}'"""
+            msg = (
+                "No analysis found for sample '${ar}' matching keyword '${kw}'"
+            )
             self.log(msg, mapping=dict(kw=kw, ar=ar.getId()))
             return None
         if len(analyses) > 1:
             self.warn(
-                'Multiple analyses found matching Keyword "${kw}"', mapping=dict(kw=kw)
+                'Multiple analyses found matching Keyword "${kw}"',
+                mapping=dict(kw=kw),
             )
             return None
         return analyses[0]
@@ -363,7 +371,7 @@ class SyngistixParser(InstrumentResultsFileParser):
         portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
         query = dict(
             portal_type=portal_types,
-            getReferenceAnalysesGroupID=analysis_group_id
+            getReferenceAnalysesGroupID=analysis_group_id,
         )
         brains = api.search(query, ANALYSIS_CATALOG)
         return True if brains else False
@@ -379,7 +387,9 @@ class SyngistixParser(InstrumentResultsFileParser):
         query = dict(portal_type="ReferenceSample", getId=reference_sample_id)
         brains = api.search(query, SENAITE_CATALOG)
         if len(brains) < 1:
-            lmsg = "No reference sample found for sample {} matching Keyword {}"
+            lmsg = (
+                "No reference sample found for sample {} matching Keyword {}"
+            )
             msg = lmsg.format(reference_sample_id, kw)
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
@@ -421,7 +431,7 @@ class importer(object):
         artoapply = request.form["artoapply"]
         override = request.form["results_override"]
         instrument = request.form.get("instrument", None)
-        worksheet = "Conc. in Sample Units" # The required worksheet's name
+        worksheet = "Conc. in Sample Units"  # The required worksheet's name
         parser = SyngistixParser(infile, worksheet=worksheet)
         if parser:
 
@@ -429,7 +439,11 @@ class importer(object):
             if artoapply == "received":
                 status = ["sample_received"]
             elif artoapply == "received_tobeverified":
-                status = ["sample_received", "attachment_due", "to_be_verified"]
+                status = [
+                    "sample_received",
+                    "attachment_due",
+                    "to_be_verified",
+                ]
 
             over = [False, False]
             if override == "nooverride":
