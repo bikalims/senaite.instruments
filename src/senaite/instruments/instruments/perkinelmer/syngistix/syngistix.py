@@ -223,7 +223,8 @@ class SyngistixParser(InstrumentResultsFileParser):
         return portal_type
 
     def parse_row(self, row_nr, parsed, sample_id):
-        parsed.update({"DefaultResult": "Reading"})
+        interim_kw = "Reading"
+        #  parsed.update({"DefaultResult": interim_kw})
         self._addRawResult(sample_id, parsed)
         return 0
 
@@ -232,7 +233,8 @@ class SyngistixParser(InstrumentResultsFileParser):
         items = row.items()
         edited_items = {k.split(" ", 1)[0]: v for k, v in items if k}
         items = edited_items.items()
-        parsed = {subn(r"[^\w\d\-_]*", "", k)[0]: v for k, v in items if k}
+        interim_kw = "Reading"
+        parsed = {subn(r"[^\w\d\-_]*", "", k)[0]: {interim_kw:v} for k, v in items if k}
         for item in items:
             keyword = item[0]
             try:
