@@ -223,7 +223,7 @@ class SyngistixParser(InstrumentResultsFileParser):
         return portal_type
 
     def parse_row(self, row_nr, parsed, sample_id):
-        interim_kw = "Reading"
+        #  interim_kw = "Reading"
         #  parsed.update({"DefaultResult": interim_kw})
         self._addRawResult(sample_id, parsed)
         return 0
@@ -234,7 +234,11 @@ class SyngistixParser(InstrumentResultsFileParser):
         edited_items = {k.split(" ", 1)[0]: v for k, v in items if k}
         items = edited_items.items()
         interim_kw = "Reading"
-        parsed = {subn(r"[^\w\d\-_]*", "", k)[0]: {interim_kw:v} for k, v in items if k}
+        parsed = {
+            subn(r"[^\w\d\-_]*", "", k)[0]: {interim_kw: v}
+            for k, v in items
+            if k
+        }
         for item in items:
             keyword = item[0]
             try:
@@ -252,22 +256,29 @@ class SyngistixParser(InstrumentResultsFileParser):
 
     def parse_duplicate_row(self, sample_id, row_nr, row):
         items = row.items()
-        parsed = {subn(r"[^\w\d\-_]*", "", k)[0]: v for k, v in items if k}
+        edited_items = {k.split(" ", 1)[0]: v for k, v in items if k}
+        items = edited_items.items()
+        interim_kw = "Reading"
+        parsed = {
+            subn(r"[^\w\d\-_]*", "", k)[0]: {interim_kw: v}
+            for k, v in items
+            if k
+        }
+        for item in items:
+            keyword = item[0]
+            try:
+                if not self.getDuplicateKeyword(sample_id, keyword):
+                    del parsed[keyword]
+            except Exception:
+                self.warn(
+                    msg="Error getting analysis for '${kw}': ${sample_id}",
+                    mapping={"kw": keyword, "sample_id": sample_id},
+                    numline=row_nr,
+                )
+                del parsed[keyword]
+        return self.parse_row(row_nr, parsed, sample_id)
 
-        keyword = "DU_SCC"
-        try:
-            if not self.getDuplicateKeyord(sample_id, keyword):
-                return 0
-        except Exception:
-            self.warn(
-                msg="Error getting analysis for '${kw}': ${sample_id}",
-                mapping={"kw": keyword, "sample_id": sample_id},
-                numline=row_nr,
-            )
-            return
-        return self.parse_row(row_nr, parsed, keyword)
-
-    def getDuplicateKeyord(self, sample_id, kw):
+    def getDuplicateKeyword(self, sample_id, kw):
         analysis = self.get_duplicate_or_qc_analysis(sample_id, kw)
         return analysis.getKeyword
 
