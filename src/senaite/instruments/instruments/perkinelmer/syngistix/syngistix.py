@@ -243,6 +243,15 @@ class SyngistixParser(InstrumentResultsFileParser):
             keyword = item[0]
             try:
                 analysis = self.get_analysis(ar, keyword)
+                interim_fields = analysis.getObject().InterimFields
+                field_kws = [x.get("keyword") for x in interim_fields if x]
+                if "Reading" not in field_kws:
+                    self.warn(
+                        msg="No interim field 'Reading' was found for Analysis '${kw}' on ${sample_id}. Result was not imported.",
+                        mapping={"kw": keyword, "sample_id": sample_id},
+                        numline=row_nr,
+                    )
+                    del parsed[keyword]
                 if not analysis:
                     del parsed[keyword]
             except Exception:
@@ -267,7 +276,15 @@ class SyngistixParser(InstrumentResultsFileParser):
         for item in items:
             keyword = item[0]
             try:
-                if not self.getDuplicateKeyword(sample_id, keyword):
+                Dup_keyword = self.getDuplicateKeyword(sample_id, keyword)
+                if not Dup_keyword:
+                    del parsed[keyword]
+                elif "No Interim Field" in Dup_keyword:
+                    self.warn(
+                        msg="No interim field 'Reading' was found for Analysis '${kw}' on ${sample_id}. Result was not imported.",
+                        mapping={"kw": keyword, "sample_id": sample_id},
+                        numline=row_nr,
+                    )
                     del parsed[keyword]
             except Exception:
                 self.warn(
@@ -280,7 +297,13 @@ class SyngistixParser(InstrumentResultsFileParser):
 
     def getDuplicateKeyword(self, sample_id, kw):
         analysis = self.get_duplicate_or_qc_analysis(sample_id, kw)
-        return analysis.getKeyword
+        keyword = analysis.getKeyword
+        if analysis:
+            interim_fields = analysis.getObject().InterimFields
+            field_kws = [x.get("keyword") for x in interim_fields if x]
+            if "Reading" not in field_kws:
+                keyword = "No Interim Field"
+        return keyword
 
     def parse_reference_sample_row(self, sample_id, row_nr, row):
         items = row.items()
