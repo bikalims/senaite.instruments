@@ -51,6 +51,7 @@ from senaite.instruments.instrument import FileStub
 from senaite.instruments.instrument import SheetNotFound
 
 
+
 class SampleNotFound(Exception):
     pass
 
@@ -176,9 +177,42 @@ class ALSXRFParser(InstrumentResultsFileParser):
 
         portal_type = ""
         lines = self.csv_data.readlines()
-        reader = csv.DictReader(lines)
+
+        # Process CSV rows
+        list_reader = csv.reader(lines)
+        rows = list(list_reader)
+        # import pdb; pdb.set_trace()
+        if len(rows) < 3:
+            self.warn("CSV file does not have enough rows.")
+            return -1
+
+        # Combine the first two rows into dictionary keys
+        keys_1 = rows[0]  # First row
+        keys_2 = rows[1]  # Second row
+        combined_headers = [
+            key2.strip() if key2.strip() else key1.strip() for key2, key1 in zip(keys_2, keys_1)
+        ]
+
+        # Process remaining rows using the combined headers
+        combined_list = [combined_headers] + rows[2:]
+
+        output = StringIO()
+        writer = csv.writer(output)
+        for row in combined_list:
+            # writer.writerow(self.remove_unwanted_columns(row))/
+            writer.writerow(row)    
+
+
+        # Move to the beginning so DictReader can read from it
+        output.seek(0)
+
+        # Read using DictReader
+        reader = csv.DictReader(output)
+        import pdb; pdb.set_trace()
+
+
         for row in reader:
-            sample_id = row.get("Name", "")
+            sample_id = row.get("SID Value 5", "")
             portal_type = self.get_portal_type(sample_id)
             if portal_type == "AnalysisRequest":
                 self.parse_ar_row(sample_id, reader.line_num, row)
@@ -218,8 +252,8 @@ class ALSXRFParser(InstrumentResultsFileParser):
         ar = self.get_ar(sample_id)
         items = row.items()
         parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
-
-        keyword = "DU_SCC"
+        import pdb; pdb.set_trace()
+        keyword = "SID Value 5"
         try:
             analysis = self.get_analysis(ar, keyword)
             if not analysis:
