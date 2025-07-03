@@ -1,4 +1,4 @@
-    # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 #
 # This file is part of SENAITE.INSTRUMENTS.
 #
@@ -49,7 +49,6 @@ from senaite.core.exportimport.instruments.resultsimport import (
 )
 from senaite.instruments.instrument import FileStub
 from senaite.instruments.instrument import SheetNotFound
-
 
 
 class SampleNotFound(Exception):
@@ -132,10 +131,14 @@ class ALSXRFParser(InstrumentResultsFileParser):
                 cellval = new_val if new_val else cell.value
 
                 try:
-                    value = "" if cellval is None else str(cellval).encode("utf8")
+                    value = (
+                        "" if cellval is None
+                        else str(cellval).encode("utf8")
+                    )
                 except UnicodeEncodeError:
                     value = (
-                        "" if cellval is None else safe_unicode(cellval).encode("utf8")
+                        "" if cellval is None
+                        else safe_unicode(cellval).encode("utf8")
                     )
                 if "\n" in value:  # fixme multi-line cell gives only 1st line
                     value = value.split("\n")[0]
@@ -165,7 +168,9 @@ class ALSXRFParser(InstrumentResultsFileParser):
                     )
                     break
                 except SheetNotFound:
-                    self.err("Sheet not found in workbook: %s" % self.worksheet)
+                    self.err(
+                        "Sheet not found in workbook: %s" % self.worksheet
+                    )
                     return -1
                 except Exception as e:  # noqa
                     pass
@@ -189,7 +194,8 @@ class ALSXRFParser(InstrumentResultsFileParser):
         keys_1 = rows[0]  # First row
         keys_2 = rows[1]  # Second row
         combined_headers = [
-            key2.strip() if key2.strip() else key1.strip() for key2, key1 in zip(keys_2, keys_1)
+            key2.strip() if key2.strip() else key1.strip()
+            for key2, key1 in zip(keys_2, keys_1)
         ]
 
         # Process remaining rows using the combined headers
@@ -198,9 +204,7 @@ class ALSXRFParser(InstrumentResultsFileParser):
         output = StringIO()
         writer = csv.writer(output)
         for row in combined_list:
-            # writer.writerow(self.remove_unwanted_columns(row))/
-            writer.writerow(row)    
-
+            writer.writerow(row)
 
         # Move to the beginning so DictReader can read from it
         output.seek(0)
@@ -260,7 +264,10 @@ class ALSXRFParser(InstrumentResultsFileParser):
         edited_items = {k.split(" ", 1)[0]: v for k, v in items if k}
         items = edited_items.items()
         interim_kw = "Reading"
-        parsed = {subn(r"[^\w\d\-_]*", "", k)[0]: {interim_kw:v} for k, v in items if k} 
+        parsed = {
+            subn(r"[^\w\d\-_]*", "", k)[0]: {interim_kw: v}
+            for k, v in items if k
+        }
         for item in items:
             keyword = item[0]
             try:
@@ -279,7 +286,6 @@ class ALSXRFParser(InstrumentResultsFileParser):
     def parse_duplicate_row(self, sample_id, row_nr, row):
         items = row.items()
         parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
-
 
         keyword = "DU_SCC"
         try:
@@ -302,7 +308,6 @@ class ALSXRFParser(InstrumentResultsFileParser):
         items = row.items()
         parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
 
-
         keyword = "DU_SCC"
         try:
             if not self.getReferenceSampleKeyword(sample_id, keyword):
@@ -315,7 +320,6 @@ class ALSXRFParser(InstrumentResultsFileParser):
             )
             return
         return self.parse_row(row_nr, parsed, keyword)
-
 
     def getReferenceSampleKeyword(self, sample_id, kw):
         sample_reference = self.get_reference_sample(sample_id, kw)
@@ -344,7 +348,10 @@ class ALSXRFParser(InstrumentResultsFileParser):
     @staticmethod
     def get_duplicate_or_qc_analysis(analysis_id, kw):
         portal_types = ["DuplicateAnalysis", "ReferenceAnalysis"]
-        query = dict(portal_type=portal_types, getReferenceAnalysesGroupID=analysis_id)
+        query = dict(
+            portal_type=portal_types,
+            getReferenceAnalysesGroupID=analysis_id
+            )
         brains = api.search(query, ANALYSIS_CATALOG)
         analyses = dict((a.getKeyword, a) for a in brains)
         brains = [v for k, v in analyses.items() if k == kw]
@@ -382,12 +389,15 @@ class ALSXRFParser(InstrumentResultsFileParser):
         analyses = self.get_analyses(ar)
         analyses = [v for k, v in analyses.items() if k == kw]
         if len(analyses) < 1:
-            msg = """No analysis found for sample '${ar}' matching keyword '${kw}'"""
+            msg = (
+                "No analysis found for sample '${ar}' matching keyword '${kw}'"
+            )
             self.log(msg, mapping=dict(kw=kw, ar=ar.getId()))
             return None
         if len(analyses) > 1:
             self.warn(
-                'Multiple analyses found matching Keyword "${kw}"', mapping=dict(kw=kw)
+                'Multiple analyses found matching Keyword "${kw}"',
+                mapping=dict(kw=kw),
             )
             return None
         return analyses[0]
@@ -413,7 +423,9 @@ class ALSXRFParser(InstrumentResultsFileParser):
         query = dict(portal_type="ReferenceSample", getId=reference_sample_id)
         brains = api.search(query, SENAITE_CATALOG)
         if len(brains) < 1:
-            lmsg = "No reference sample found for sample {} matching Keyword {}"
+            lmsg = (
+                "No reference sample found for sample {} matching Keyword {}"
+            )
             msg = lmsg.format(reference_sample_id, kw)
             raise AnalysisNotFound(msg)
         if len(brains) > 1:
@@ -435,6 +447,7 @@ class ALSXRFParser(InstrumentResultsFileParser):
         del row["Total"]
         del row[""]
         return row
+
 
 class importer(object):
     implements(IInstrumentImportInterface, IInstrumentAutoImportInterface)
@@ -466,8 +479,11 @@ class importer(object):
             if artoapply == "received":
                 status = ["sample_received"]
             elif artoapply == "received_tobeverified":
-                status = ["sample_received", "attachment_due", "to_be_verified"]
-
+                status = [
+                    "sample_received",
+                    "attachment_due",
+                    "to_be_verified",
+                ]
             over = [False, False]
             if override == "nooverride":
                 over = [False, False]
