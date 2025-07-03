@@ -243,7 +243,11 @@ class SyngistixParser(InstrumentResultsFileParser):
             keyword = item[0]
             try:
                 analysis = self.get_analysis(ar, keyword)
-                interim_fields = analysis.getObject().InterimFields
+                analysis_obj = analysis.getObject()
+                import pdb; pdb.set_trace()
+                analysis.InterimFields
+                interim_fields = analysis_obj.InterimFields
+                precision = analysis_obj.Precision
                 field_kws = [x.get("keyword") for x in interim_fields if x]
                 if "Reading" not in field_kws:
                     self.warn(
@@ -252,6 +256,10 @@ class SyngistixParser(InstrumentResultsFileParser):
                         numline=row_nr,
                     )
                     del parsed[keyword]
+                else:
+                    result = float(parsed[keyword][interim_kw])
+                    rounded_result = round(result, precision)
+                    parsed[keyword][interim_kw] = str(rounded_result)
                 if not analysis:
                     del parsed[keyword]
             except Exception:
@@ -276,7 +284,9 @@ class SyngistixParser(InstrumentResultsFileParser):
         for item in items:
             keyword = item[0]
             try:
-                Dup_keyword = self.getDuplicateKeyword(sample_id, keyword)
+                analysis = self.get_duplicate_or_qc_analysis(sample_id, keyword)
+                Dup_keyword = self.getDuplicateKeyword(analysis)
+                precision = analysis.getObject().Precision
                 if not Dup_keyword:
                     del parsed[keyword]
                 elif "No Interim Field" in Dup_keyword:
@@ -286,6 +296,10 @@ class SyngistixParser(InstrumentResultsFileParser):
                         numline=row_nr,
                     )
                     del parsed[keyword]
+                else:
+                    result = float(parsed[keyword][interim_kw])
+                    rounded_result = round(result, precision)
+                    parsed[keyword][interim_kw] = str(rounded_result)
             except Exception:
                 self.warn(
                     msg="Error getting analysis for '${kw}': ${sample_id}",
@@ -295,8 +309,7 @@ class SyngistixParser(InstrumentResultsFileParser):
                 del parsed[keyword]
         return self.parse_row(row_nr, parsed, sample_id)
 
-    def getDuplicateKeyword(self, sample_id, kw):
-        analysis = self.get_duplicate_or_qc_analysis(sample_id, kw)
+    def getDuplicateKeyword(self, analysis):
         keyword = analysis.getKeyword
         if analysis:
             interim_fields = analysis.getObject().InterimFields
