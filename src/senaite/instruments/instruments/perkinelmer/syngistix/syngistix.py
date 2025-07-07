@@ -244,7 +244,6 @@ class SyngistixParser(InstrumentResultsFileParser):
             try:
                 analysis = self.get_analysis(ar, keyword)
                 analysis_obj = analysis.getObject()
-                import pdb; pdb.set_trace()
                 analysis.InterimFields
                 interim_fields = analysis_obj.InterimFields
                 precision = analysis_obj.Precision
