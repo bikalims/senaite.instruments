@@ -244,7 +244,6 @@ class SyngistixParser(InstrumentResultsFileParser):
             try:
                 analysis = self.get_analysis(ar, keyword)
                 analysis_obj = analysis.getObject()
-                analysis.InterimFields
                 interim_fields = analysis_obj.InterimFields
                 precision = analysis_obj.Precision
                 field_kws = [x.get("keyword") for x in interim_fields if x]
@@ -255,12 +254,12 @@ class SyngistixParser(InstrumentResultsFileParser):
                         numline=row_nr,
                     )
                     del parsed[keyword]
+                elif not analysis:
+                    del parsed[keyword]
                 else:
                     result = float(parsed[keyword][interim_kw])
                     rounded_result = round(result, precision)
                     parsed[keyword][interim_kw] = str(rounded_result)
-                if not analysis:
-                    del parsed[keyword]
             except Exception:
                 self.warn(
                     msg="Error getting analysis for '${kw}': ${sample_id}",
