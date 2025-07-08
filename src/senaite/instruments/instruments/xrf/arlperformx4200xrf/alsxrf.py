@@ -253,8 +253,6 @@ class ALSXRFParser(InstrumentResultsFileParser):
         return portal_type
 
     def parse_row(self, row_nr, parsed, sample_id):
-        # parsed.update({"DefaultResult": "Reading"})
-        # interim_kw = "Reading"
         self._addRawResult(sample_id, parsed)
         return 0
 
@@ -273,8 +271,23 @@ class ALSXRFParser(InstrumentResultsFileParser):
             keyword = item[0]
             try:
                 analysis = self.get_analysis(ar, keyword)
-                if not analysis:
+                analysis_obj = analysis.getObject()
+                interim_fields = analysis_obj.InterimFields
+                precision = analysis_obj.Precision
+                field_kws = [x.get("keyword") for x in interim_fields if x]
+                if "Reading" not in field_kws:
+                    self.warn(
+                        msg="No interim field 'Reading' was found for Analysis '${kw}' on ${sample_id}. Result was not imported.",
+                        mapping={"kw": keyword, "sample_id": sample_id},
+                        numline=row_nr,
+                    )
                     del parsed[keyword]
+                elif not analysis:
+                    del parsed[keyword]
+                else:
+                    result = float(parsed[keyword][interim_kw])
+                    rounded_result = round(result, precision)
+                    parsed[keyword][interim_kw] = str(rounded_result)
             except Exception as e:
                 self.warn(
                     msg="Error getting analysis for '${kw}': ${sample_id}",
@@ -297,9 +310,22 @@ class ALSXRFParser(InstrumentResultsFileParser):
         for item in items:
             keyword = item[0]
             try:
-                if not self.getDuplicateKeyword(sample_id, keyword):
+                analysis = self.get_duplicate_or_qc_analysis(sample_id, keyword)
+                Dup_keyword = self.getDuplicateKeyword(analysis)
+                precision = analysis.getObject().Precision
+                if not Dup_keyword:
                     del parsed[keyword]
-
+                elif "No Interim Field" in Dup_keyword:
+                    self.warn(
+                        msg="No interim field 'Reading' was found for Analysis '${kw}' on ${sample_id}. Result was not imported.",
+                        mapping={"kw": keyword, "sample_id": sample_id},
+                        numline=row_nr,
+                    )
+                    del parsed[keyword]
+                else:
+                    result = float(parsed[keyword][interim_kw])
+                    rounded_result = round(result, precision)
+                    parsed[keyword][interim_kw] = str(rounded_result)
             except Exception:
                 self.warn(
                     msg="Error getting analysis for '${kw}': ${sample_id}",
@@ -309,9 +335,14 @@ class ALSXRFParser(InstrumentResultsFileParser):
                 del parsed[keyword]
         return self.parse_row(row_nr, parsed, sample_id)
 
-    def getDuplicateKeyword(self, sample_id, kw):
-        analysis = self.get_duplicate_or_qc_analysis(sample_id, kw)
-        return analysis.getKeyword
+    def getDuplicateKeyword(self, analysis):
+        keyword = analysis.getKeyword
+        if analysis:
+            interim_fields = analysis.getObject().InterimFields
+            field_kws = [x.get("keyword") for x in interim_fields if x]
+            if "Reading" not in field_kws:
+                keyword = "No Interim Field"
+        return keyword
 
     def parse_reference_sample_row(self, sample_id, row_nr, row):
         items = row.items()
