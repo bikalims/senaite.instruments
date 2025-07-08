@@ -254,7 +254,7 @@ class ALSXRFParser(InstrumentResultsFileParser):
 
     def parse_row(self, row_nr, parsed, sample_id):
         # parsed.update({"DefaultResult": "Reading"})
-        interim_kw = "Reading"
+        # interim_kw = "Reading"
         self._addRawResult(sample_id, parsed)
         return 0
 
@@ -266,7 +266,8 @@ class ALSXRFParser(InstrumentResultsFileParser):
         interim_kw = "Reading"
         parsed = {
             subn(r"[^\w\d\-_]*", "", k)[0]: {interim_kw: v}
-            for k, v in items if k
+            for k, v in items
+            if k
         }
         for item in items:
             keyword = item[0]
@@ -285,22 +286,30 @@ class ALSXRFParser(InstrumentResultsFileParser):
 
     def parse_duplicate_row(self, sample_id, row_nr, row):
         items = row.items()
-        parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
+        edited_items = {k.split(" ", 1)[0]: v for k, v in items if k}
+        items = edited_items.items()
+        interim_kw = "Reading"
+        parsed = {
+            subn(r"[^\w\d\-_]*", "", k)[0]: {interim_kw: v}
+            for k, v in items
+            if k
+        }
+        for item in items:
+            keyword = item[0]
+            try:
+                if not self.getDuplicateKeyword(sample_id, keyword):
+                    del parsed[keyword]
 
-        keyword = "DU_SCC"
-        try:
-            if not self.getDuplicateKeyord(sample_id, keyword):
-                return 0
-        except Exception as e:
-            self.warn(
-                msg="Error getting analysis for '${kw}': ${sample_id}",
-                mapping={"kw": keyword, "sample_id": sample_id},
-                numline=row_nr,
-            )
-            return
-        return self.parse_row(row_nr, parsed, keyword)
+            except Exception:
+                self.warn(
+                    msg="Error getting analysis for '${kw}': ${sample_id}",
+                    mapping={"kw": keyword, "sample_id": sample_id},
+                    numline=row_nr,
+                )
+                del parsed[keyword]
+        return self.parse_row(row_nr, parsed, sample_id)
 
-    def getDuplicateKeyord(self, sample_id, kw):
+    def getDuplicateKeyword(self, sample_id, kw):
         analysis = self.get_duplicate_or_qc_analysis(sample_id, kw)
         return analysis.getKeyword
 
