@@ -228,9 +228,33 @@ class SyngistixParser(InstrumentResultsFileParser):
         self._addRawResult(sample_id, parsed)
         return 0
 
+    def find_repeated_results(self, row, sample_id, row_nr):
+        repeat_indexes = []
+        repeat_keys = []
+        items = row.items()
+        keywords = [x[0].split(" ", 1)[0] for x in items]
+        for key_indx, key in enumerate(keywords):
+            if keywords.count(key) > 1:
+                repeat_indexes.append(key_indx)
+                if key not in repeat_keys:
+                    self.warn(
+                        msg="Duplicate keyword(s) '${kw}' found for Sample"
+                            " ${sample_id} and their results are not imported",
+                        mapping={"kw": key, "sample_id": sample_id},
+                        numline=row_nr,
+                    )
+                    repeat_keys.append(key)
+        return items, repeat_indexes
+
+    def remove_repeated_results(self, items, indexes):
+        for index in sorted(indexes, reverse=True):
+            del items[index]
+        return items
+
     def parse_ar_row(self, sample_id, row_nr, row):
         ar = self.get_ar(sample_id)
-        items = row.items()
+        items, indexes = self.find_repeated_results(row, sample_id, row_nr)
+        items = self.remove_repeated_results(items, indexes)
         edited_items = {k.split(" ", 1)[0]: v for k, v in items if k}
         items = edited_items.items()
         interim_kw = "Reading"
@@ -249,7 +273,8 @@ class SyngistixParser(InstrumentResultsFileParser):
                 field_kws = [x.get("keyword") for x in interim_fields if x]
                 if "Reading" not in field_kws:
                     self.warn(
-                        msg="No interim field 'Reading' was found for Analysis '${kw}' on ${sample_id}. Result was not imported.",
+                        msg="No interim field 'Reading' was found for Analysis"
+                        " '${kw}' on ${sample_id}. Result was not imported.",
                         mapping={"kw": keyword, "sample_id": sample_id},
                         numline=row_nr,
                     )
@@ -258,6 +283,8 @@ class SyngistixParser(InstrumentResultsFileParser):
                     del parsed[keyword]
                 else:
                     result = float(parsed[keyword][interim_kw])
+                    if result != 0:
+                        result = result / 10000
                     rounded_result = round(result, precision)
                     parsed[keyword][interim_kw] = str(rounded_result)
             except Exception:
@@ -270,7 +297,8 @@ class SyngistixParser(InstrumentResultsFileParser):
         return self.parse_row(row_nr, parsed, sample_id)
 
     def parse_duplicate_row(self, sample_id, row_nr, row):
-        items = row.items()
+        items, indexes = self.find_repeated_results(row, sample_id, row_nr)
+        items = self.remove_repeated_results(items, indexes)
         edited_items = {k.split(" ", 1)[0]: v for k, v in items if k}
         items = edited_items.items()
         interim_kw = "Reading"
@@ -282,20 +310,26 @@ class SyngistixParser(InstrumentResultsFileParser):
         for item in items:
             keyword = item[0]
             try:
-                analysis = self.get_duplicate_or_qc_analysis(sample_id, keyword)
+                analysis = self.get_duplicate_or_qc_analysis(
+                    sample_id, keyword
+                )
                 Dup_keyword = self.getDuplicateKeyword(analysis)
                 precision = analysis.getObject().Precision
                 if not Dup_keyword:
                     del parsed[keyword]
                 elif "No Interim Field" in Dup_keyword:
                     self.warn(
-                        msg="No interim field 'Reading' was found for Analysis '${kw}' on ${sample_id}. Result was not imported.",
+                        msg="No interim field 'Reading' was found for Analysis"
+                            " '${kw}' on ${sample_id}."
+                            " Result was not imported.",
                         mapping={"kw": keyword, "sample_id": sample_id},
                         numline=row_nr,
                     )
                     del parsed[keyword]
                 else:
                     result = float(parsed[keyword][interim_kw])
+                    if result != 0:
+                        result = result / 10000
                     rounded_result = round(result, precision)
                     parsed[keyword][interim_kw] = str(rounded_result)
             except Exception:
