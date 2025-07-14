@@ -238,7 +238,8 @@ class SyngistixParser(InstrumentResultsFileParser):
                 repeat_indexes.append(key_indx)
                 if key not in repeat_keys:
                     self.warn(
-                        msg="Duplicate keyword(s) '${kw}' found for Sample ${sample_id} and their results are not imported",
+                        msg="Duplicate keyword(s) '${kw}' found for Sample"
+                            " ${sample_id} and their results are not imported",
                         mapping={"kw": key, "sample_id": sample_id},
                         numline=row_nr,
                     )
@@ -272,7 +273,8 @@ class SyngistixParser(InstrumentResultsFileParser):
                 field_kws = [x.get("keyword") for x in interim_fields if x]
                 if "Reading" not in field_kws:
                     self.warn(
-                        msg="No interim field 'Reading' was found for Analysis '${kw}' on ${sample_id}. Result was not imported.",
+                        msg="No interim field 'Reading' was found for Analysis"
+                        " '${kw}' on ${sample_id}. Result was not imported.",
                         mapping={"kw": keyword, "sample_id": sample_id},
                         numline=row_nr,
                     )
@@ -282,7 +284,7 @@ class SyngistixParser(InstrumentResultsFileParser):
                 else:
                     result = float(parsed[keyword][interim_kw])
                     if result != 0:
-                        result = result/10000
+                        result = result / 10000
                     rounded_result = round(result, precision)
                     parsed[keyword][interim_kw] = str(rounded_result)
             except Exception:
@@ -308,14 +310,18 @@ class SyngistixParser(InstrumentResultsFileParser):
         for item in items:
             keyword = item[0]
             try:
-                analysis = self.get_duplicate_or_qc_analysis(sample_id, keyword)
+                analysis = self.get_duplicate_or_qc_analysis(
+                    sample_id, keyword
+                )
                 Dup_keyword = self.getDuplicateKeyword(analysis)
                 precision = analysis.getObject().Precision
                 if not Dup_keyword:
                     del parsed[keyword]
                 elif "No Interim Field" in Dup_keyword:
                     self.warn(
-                        msg="No interim field 'Reading' was found for Analysis '${kw}' on ${sample_id}. Result was not imported.",
+                        msg="No interim field 'Reading' was found for Analysis"
+                            " '${kw}' on ${sample_id}."
+                            " Result was not imported.",
                         mapping={"kw": keyword, "sample_id": sample_id},
                         numline=row_nr,
                     )
@@ -323,7 +329,7 @@ class SyngistixParser(InstrumentResultsFileParser):
                 else:
                     result = float(parsed[keyword][interim_kw])
                     if result != 0:
-                        result = result/10000
+                        result = result / 10000
                     rounded_result = round(result, precision)
                     parsed[keyword][interim_kw] = str(rounded_result)
             except Exception:
