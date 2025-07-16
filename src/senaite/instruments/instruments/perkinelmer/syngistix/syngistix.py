@@ -557,6 +557,7 @@ class importer(object):
 
 
 class MyExport(BrowserView):
+
     def __init__(self, context, request):
         self.context = context
         self.request = request
@@ -569,23 +570,32 @@ class MyExport(BrowserView):
         layout = self.context.getLayout()
         tmprows = []
         parsed_analyses = {}
-        headers = ["Sample Label", "Weight", "Volume", "Dilution"]
+        headers = ["Sample No", "A/S Location", "Sample ID", "Initial Sample Wt.", "Sample Prep. Vol.", "Aliquot Volume", "Diluted To Vol."]
         tmprows.append(headers)
 
         for indx, item in enumerate(layout):
             c_uid = item["container_uid"]
             a_uid = item["analysis_uid"]
             analysis = uc(UID=a_uid)[0].getObject() if a_uid else None
-            container = uc(UID=c_uid)[0].getObject() if c_uid else None
+            sample = uc(UID=c_uid)[0].getObject() if c_uid else None
+
+            if indx == 0:
+                location = "-"
+            else:
+                location = ""
 
             if item["type"] == "a":
-                analysis_id = container.id
+                analysis_id = sample.id
+                weight_value = self.get_sample_weight_value(sample)
             elif item["type"] in "bcd":
                 analysis_id = analysis.getReferenceAnalysesGroupID()
+                weight_value = self.get_reference_sample_weight_value(sample)
+
             if parsed_analyses.get(analysis_id):
                 continue
             else:
-                tmprows.append([analysis_id, "", "", ""])
+                position = item.get("position")
+                tmprows.append([position, location, analysis_id, weight_value, "", "", ""])
                 parsed_analyses[analysis_id] = 10
 
         result = self.dict_to_string(tmprows)
@@ -595,6 +605,30 @@ class MyExport(BrowserView):
         setheader("Content-Disposition", "inline; filename=%s" % filename)
         setheader("Content-Type", "text/csv")
         self.request.RESPONSE.write(result)
+
+    def get_sample_weight_value(self, sample):
+        weight_kw = "DigestionWeight"
+        services = sample.getAnalyses()
+        services_kw = [x.getObject().Keyword for x in services]
+        if weight_kw in services_kw:
+            weight_indx = services_kw.index(weight_kw)
+            weight_object = services[weight_indx].getObject()
+            weight_value = weight_object.getResult()
+        else:
+            weight_value = ""
+        return weight_value
+
+    def get_reference_sample_weight_value(self, sample):
+        weight_kw = "DigestionWeight"
+        services = sample.getReferenceAnalyses()
+        services_kw = [x.Keyword for x in services]
+        if weight_kw in services_kw:
+            weight_indx = services_kw.index(weight_kw)
+            weight_object = services[weight_indx]
+            weight_value = weight_object.getResult()
+        else:
+            weight_value = ""
+        return weight_value
 
     @staticmethod
     def dict_to_string(rows):
@@ -608,7 +642,7 @@ class MyExport(BrowserView):
         return final_rows
 
 
-class syngistixesxport(object):
+class syngistixexporter(object):
     implements(IInstrumentExportInterface)
     title = "Perkin Elmer Syngistix Exporter"
     __file__ = abspath(__file__)  # noqa
