@@ -239,7 +239,7 @@ class SyngistixParser(InstrumentResultsFileParser):
                 if key not in repeat_keys:
                     self.warn(
                         msg="Duplicate keyword(s) '${kw}' found for Sample"
-                            " ${sample_id} and their results are not imported",
+                        " ${sample_id} and their results are not imported",
                         mapping={"kw": key, "sample_id": sample_id},
                         numline=row_nr,
                     )
@@ -320,8 +320,8 @@ class SyngistixParser(InstrumentResultsFileParser):
                 elif "No Interim Field" in Dup_keyword:
                     self.warn(
                         msg="No interim field 'Reading' was found for Analysis"
-                            " '${kw}' on ${sample_id}."
-                            " Result was not imported.",
+                        " '${kw}' on ${sample_id}."
+                        " Result was not imported.",
                         mapping={"kw": keyword, "sample_id": sample_id},
                         numline=row_nr,
                     )
@@ -557,7 +557,6 @@ class importer(object):
 
 
 class MyExport(BrowserView):
-
     def __init__(self, context, request):
         self.context = context
         self.request = request
@@ -570,7 +569,15 @@ class MyExport(BrowserView):
         layout = self.context.getLayout()
         tmprows = []
         parsed_analyses = {}
-        headers = ["Sample No", "A/S Location", "Sample ID", "Initial Sample Wt.", "Sample Prep. Vol.", "Aliquot Volume", "Diluted To Vol."]
+        headers = [
+            "Sample No",
+            "A/S Location",
+            "Sample ID",
+            "Initial Sample Wt.",
+            "Sample Prep. Vol.",
+            "Aliquot Volume",
+            "Diluted To Vol.",
+        ]
         tmprows.append(headers)
 
         for indx, item in enumerate(layout):
@@ -595,7 +602,9 @@ class MyExport(BrowserView):
                 continue
             else:
                 position = item.get("position")
-                tmprows.append([position, location, analysis_id, weight_value, "", "", ""])
+                tmprows.append(
+                    [position, location, analysis_id, weight_value, "", "", ""]
+                )
                 parsed_analyses[analysis_id] = 10
 
         result = self.dict_to_string(tmprows)
