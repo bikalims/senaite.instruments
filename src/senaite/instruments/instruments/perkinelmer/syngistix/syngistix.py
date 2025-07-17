@@ -196,10 +196,7 @@ class SyngistixParser(InstrumentResultsFileParser):
             if portal_type == "AnalysisRequest":
                 self.parse_ar_row(sample_id, row_num, row)
             elif portal_type in ["DuplicateAnalysis", "ReferenceAnalysis"]:
-                self.parse_duplicate_row(sample_id, row_num, row)
-
-            elif portal_type == "ReferenceSample":
-                self.parse_reference_sample_row(sample_id, row_num, row)
+                self.parse_duplicate_and_reference_row(sample_id, row_num, row)
             else:
                 self.warn(
                     msg="No results found for '${sample_id}'",
@@ -223,8 +220,9 @@ class SyngistixParser(InstrumentResultsFileParser):
         return portal_type
 
     def parse_row(self, row_nr, parsed, sample_id):
-        #  interim_kw = "Reading"
-        #  parsed.update({"DefaultResult": interim_kw})
+        #  parsed = { as_kw: {interim_kw: result1},
+        #             as_kw2: {interim_kw: result2}, ...
+        #           }
         self._addRawResult(sample_id, parsed)
         return 0
 
@@ -292,11 +290,11 @@ class SyngistixParser(InstrumentResultsFileParser):
                     msg="Error getting analysis for '${kw}': ${sample_id}",
                     mapping={"kw": keyword, "sample_id": sample_id},
                     numline=row_nr,
-                )
+                    )
                 del parsed[keyword]
         return self.parse_row(row_nr, parsed, sample_id)
 
-    def parse_duplicate_row(self, sample_id, row_nr, row):
+    def parse_duplicate_and_reference_row(self, sample_id, row_nr, row):
         items, indexes = self.find_repeated_results(row, sample_id, row_nr)
         items = self.remove_repeated_results(items, indexes)
         edited_items = {k.split(" ", 1)[0]: v for k, v in items if k}
@@ -349,23 +347,6 @@ class SyngistixParser(InstrumentResultsFileParser):
             if "Reading" not in field_kws:
                 keyword = "No Interim Field"
         return keyword
-
-    def parse_reference_sample_row(self, sample_id, row_nr, row):
-        items = row.items()
-        parsed = {subn(r"[^\w\d\-_]*", "", k)[0]: v for k, v in items if k}
-
-        keyword = "DU_SCC"
-        try:
-            if not self.getReferenceSampleKeyword(sample_id, keyword):
-                return 0
-        except Exception:
-            self.warn(
-                msg="Error getting analysis for '${kw}': ${sample_id}",
-                mapping={"kw": keyword, "sample_id": sample_id},
-                numline=row_nr,
-            )
-            return
-        return self.parse_row(row_nr, parsed, keyword)
 
     def getReferenceSampleKeyword(self, sample_id, kw):
         sample_reference = self.get_reference_sample(sample_id, kw)
