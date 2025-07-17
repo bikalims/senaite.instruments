@@ -597,7 +597,7 @@ class MyExport(BrowserView):
         self.request.RESPONSE.write(result)
 
     def get_sample_weight_value(self, sample):
-        weight_kw = "DigestionWeight"
+        weight_kw = "WeightDigested"
         services = sample.getAnalyses()
         services_kw = [x.getObject().Keyword for x in services]
         if weight_kw in services_kw:
@@ -609,7 +609,7 @@ class MyExport(BrowserView):
         return weight_value
 
     def get_reference_sample_weight_value(self, sample):
-        weight_kw = "DigestionWeight"
+        weight_kw = "WeightDigested"
         services = sample.getReferenceAnalyses()
         services_kw = [x.Keyword for x in services]
         if weight_kw in services_kw:
