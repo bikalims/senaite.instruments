@@ -197,6 +197,7 @@ class ALSXRFParser(InstrumentResultsFileParser):
             key2.strip() if key2.strip() else key1.strip()
             for key2, key1 in zip(keys_2, keys_1)
         ]
+        combined_headers = self.make_headers_unique(combined_headers)
 
         # Process remaining rows using the combined headers
         combined_list = [combined_headers] + rows[2:]
@@ -226,10 +227,8 @@ class ALSXRFParser(InstrumentResultsFileParser):
                 self.parse_ar_row(sample_id, row_num, row)
 
             elif portal_type in ["DuplicateAnalysis", "ReferenceAnalysis"]:
-                self.parse_duplicate_row(sample_id, row_num, row)
+                self.parse_duplicate_and_reference_row(sample_id, row_num, row)
 
-            elif portal_type == "ReferenceSample":
-                self.parse_reference_sample_row(sample_id, row_num, row)
             else:
                 self.warn(
                     msg="No results found for '${sample_id}'",
@@ -238,6 +237,28 @@ class ALSXRFParser(InstrumentResultsFileParser):
                 )
             row_num = row_num + 1
         return 1
+
+    def make_headers_unique(self, headers):
+        """Make duplicate headers unique by appending ' 1', ' 2', etc."""
+        seen = {}
+        unique_headers = []
+
+        for header in headers:
+            # Skip blank headers entirely
+            if not header or not str(header).strip():
+                unique_headers.append(header)
+                continue
+
+            header = str(header).strip()
+
+            if header in seen:
+                seen[header] += 1
+                unique_headers.append("{} {}".format(header, seen[header]))
+            else:
+                seen[header] = 1
+                unique_headers.append(header)
+
+        return unique_headers
 
     def get_portal_type(self, sample_id):
         portal_type = None
@@ -256,9 +277,33 @@ class ALSXRFParser(InstrumentResultsFileParser):
         self._addRawResult(sample_id, parsed)
         return 0
 
+    def find_repeated_results(self, row, sample_id, row_nr):
+        repeat_indexes = []
+        repeat_keys = []
+        items = row.items()
+        keywords = [x[0].split(" ", 1)[0] for x in items]
+        for key_indx, key in enumerate(keywords):
+            if keywords.count(key) > 1:
+                repeat_indexes.append(key_indx)
+                if key not in repeat_keys:
+                    self.warn(
+                        msg="Duplicate keyword(s) '${kw}' found for Sample "
+                            "${sample_id} and their results are not imported",
+                        mapping={"kw": key, "sample_id": sample_id},
+                        numline=row_nr,
+                    )
+                    repeat_keys.append(key)
+        return items, repeat_indexes
+
+    def remove_repeated_results(self, items, indexes):
+        for index in sorted(indexes, reverse=True):
+            del items[index]
+        return items
+
     def parse_ar_row(self, sample_id, row_nr, row):
         ar = self.get_ar(sample_id)
-        items = row.items()
+        items, indexes = self.find_repeated_results(row, sample_id, row_nr)
+        items = self.remove_repeated_results(items, indexes)
         edited_items = {k.split(" ", 1)[0]: v for k, v in items if k}
         items = edited_items.items()
         interim_kw = "Reading"
@@ -277,7 +322,9 @@ class ALSXRFParser(InstrumentResultsFileParser):
                 field_kws = [x.get("keyword") for x in interim_fields if x]
                 if "Reading" not in field_kws:
                     self.warn(
-                        msg="No interim field 'Reading' was found for Analysis '${kw}' on ${sample_id}. Result was not imported.",
+                        msg="No interim field 'Reading' was found for Analysis"
+                            "'${kw}' on ${sample_id}."
+                            " Result was not imported.",
                         mapping={"kw": keyword, "sample_id": sample_id},
                         numline=row_nr,
                     )
@@ -297,8 +344,9 @@ class ALSXRFParser(InstrumentResultsFileParser):
                 del parsed[keyword]
         return self.parse_row(row_nr, parsed, sample_id)
 
-    def parse_duplicate_row(self, sample_id, row_nr, row):
-        items = row.items()
+    def parse_duplicate_and_reference_row(self, sample_id, row_nr, row):
+        items, indexes = self.find_repeated_results(row, sample_id, row_nr)
+        items = self.remove_repeated_results(items, indexes)
         edited_items = {k.split(" ", 1)[0]: v for k, v in items if k}
         items = edited_items.items()
         interim_kw = "Reading"
@@ -310,14 +358,18 @@ class ALSXRFParser(InstrumentResultsFileParser):
         for item in items:
             keyword = item[0]
             try:
-                analysis = self.get_duplicate_or_qc_analysis(sample_id, keyword)
+                analysis = self.get_duplicate_or_qc_analysis(
+                    sample_id, keyword
+                )
                 Dup_keyword = self.getDuplicateKeyword(analysis)
                 precision = analysis.getObject().Precision
                 if not Dup_keyword:
                     del parsed[keyword]
                 elif "No Interim Field" in Dup_keyword:
                     self.warn(
-                        msg="No interim field 'Reading' was found for Analysis '${kw}' on ${sample_id}. Result was not imported.",
+                        msg="No interim field 'Reading' was found for Analysis"
+                        "'${kw}' on ${sample_id}."
+                        "Result was not imported.",
                         mapping={"kw": keyword, "sample_id": sample_id},
                         numline=row_nr,
                     )
@@ -343,47 +395,6 @@ class ALSXRFParser(InstrumentResultsFileParser):
             if "Reading" not in field_kws:
                 keyword = "No Interim Field"
         return keyword
-
-    def parse_reference_sample_row(self, sample_id, row_nr, row):
-        items = row.items()
-        parsed = {subn(r'[^\w\d\-_]*', '', k)[0]: v for k, v in items if k}
-
-        keyword = "DU_SCC"
-        try:
-            if not self.getReferenceSampleKeyword(sample_id, keyword):
-                return 0
-        except Exception as e:
-            self.warn(
-                msg="Error getting analysis for '${kw}': ${sample_id}",
-                mapping={"kw": keyword, "sample_id": sample_id},
-                numline=row_nr,
-            )
-            return
-        return self.parse_row(row_nr, parsed, keyword)
-
-    def getReferenceSampleKeyword(self, sample_id, kw):
-        sample_reference = self.get_reference_sample(sample_id, kw)
-        analysis = self.get_reference_sample_analysis(sample_reference, kw)
-        return analysis.getKeyword()
-
-    def get_reference_sample_analysis(self, reference_sample, kw):
-        kw = kw
-        brains = self.get_reference_sample_analyses(reference_sample)
-        brains = [v for k, v in brains.items() if k == kw]
-        if len(brains) < 1:
-            lmsg = "No analysis found for sample {} matching Keyword {}"
-            msg = lmsg.format(reference_sample, kw)
-            raise AnalysisNotFound(msg)
-        if len(brains) > 1:
-            lmsg = "Multiple objects found for sample {} matching Keyword '{}'"
-            msg = lmsg.format(reference_sample, kw)
-            raise MultipleAnalysesFound(msg)
-        return brains[0]
-
-    @staticmethod
-    def get_reference_sample_analyses(reference_sample):
-        brains = reference_sample.getObject().getReferenceAnalyses()
-        return dict((a.getKeyword(), a) for a in brains)
 
     @staticmethod
     def get_duplicate_or_qc_analysis(analysis_id, kw):
