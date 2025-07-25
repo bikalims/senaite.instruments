@@ -42,7 +42,7 @@
                 Override non-empty results
             </option>
             <option value="overrideempty">
-                Override non-empty results (also with empty)
+                Override all results
             </option>
         </select>
     </div>
