@@ -63,7 +63,8 @@ class TestALSXRF(DataTestCase):
 
         self.client = self.add_client(title="Happy Hills", ClientID="HH")
 
-        self.contact = self.add_contact(self.client, Firstname="Rita", Surname="Mohale")
+        self.contact = self.add_contact(self.client, Firstname="Rita",
+                                        Surname="Mohale")
 
         self.instrument = self.add_instrument(
             title=TITLE,
@@ -105,7 +106,7 @@ class TestALSXRF(DataTestCase):
             ),
             [srv.UID() for srv in self.services],
         )
-        
+
         ar_2 = self.add_analysisrequest(
             self.client,
             dict(
@@ -150,7 +151,7 @@ class TestALSXRF(DataTestCase):
         data = open(fn1, "rb").read()
         import_file = FileUpload(TestFile(cStringIO.StringIO(data), fn1))
         request = TestRequest(
-            form=dict(  
+            form=dict(
                 instrument_results_file_format="xlsx",
                 submitted=True,
                 artoapply="received_tobeverified",
