@@ -318,7 +318,7 @@ class ALSXRFParser(InstrumentResultsFileParser):
                 analysis = self.get_analysis(ar, keyword)
                 analysis_obj = analysis.getObject()
                 interim_fields = analysis_obj.InterimFields
-                precision = analysis_obj.Precision
+                precision = analysis_obj.Precision or 5
                 field_kws = [x.get("keyword") for x in interim_fields if x]
                 if "Reading" not in field_kws:
                     self.warn(
@@ -362,7 +362,7 @@ class ALSXRFParser(InstrumentResultsFileParser):
                     sample_id, keyword
                 )
                 Dup_keyword = self.getDuplicateKeyword(analysis)
-                precision = analysis.getObject().Precision
+                precision = analysis.getObject().Precision or 5
                 if not Dup_keyword:
                     del parsed[keyword]
                 elif "No Interim Field" in Dup_keyword:
