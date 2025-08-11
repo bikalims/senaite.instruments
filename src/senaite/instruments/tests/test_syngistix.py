@@ -11,14 +11,15 @@ from os.path import abspath
 from os.path import dirname
 from os.path import join
 
-import unittest2 as unittest
 from plone.app.testing import TEST_USER_ID
 from plone.app.testing import TEST_USER_NAME
 from plone.app.testing import login
 from plone.app.testing import setRoles
 
 from bika.lims import api
-from senaite.instruments.instruments.perkinelmer.syngistix.syngistix import importer
+from senaite.instruments.instruments.perkinelmer.syngistix.syngistix import (
+    importer,
+)
 from senaite.instruments.tests import TestFile
 from senaite.instruments.tests.base import BaseTestCase
 from zope.publisher.browser import FileUpload
@@ -141,7 +142,7 @@ class TestSyngistix(BaseTestCase):
             )
         )
 
-        results = importer.Import(self.portal, request)
+        results = importer.Import(self.portal, request)  # noqa
 
         a_potassium_first = ar.getAnalyses(full_objects=True, getKeyword="K")[
             0
@@ -160,7 +161,7 @@ class TestSyngistix(BaseTestCase):
         reading_value_2 = self.get_interim_result(a_potassium_second)
         reading_value_3 = self.get_interim_result(a_potassium_third)
         reading_value_4 = self.get_interim_result(a_potassium_fourth)
-        test_results = eval(results)
+
         self.assertEqual(reading_value_1, "2.23")
         self.assertEqual(reading_value_2, "1.6")
         self.assertEqual(reading_value_3, "1.61")

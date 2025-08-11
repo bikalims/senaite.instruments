@@ -291,7 +291,7 @@ class SyngistixParser(InstrumentResultsFileParser):
                     msg="Error getting analysis for '${kw}': ${sample_id}",
                     mapping={"kw": keyword, "sample_id": sample_id},
                     numline=row_nr,
-                    )
+                )
                 del parsed[keyword]
         return self.parse_row(row_nr, parsed, sample_id)
 
@@ -313,7 +313,7 @@ class SyngistixParser(InstrumentResultsFileParser):
                     sample_id, keyword
                 )
                 Dup_keyword = self.getDuplicateKeyword(analysis)
-                precision = analysis.getObject().Precision
+                precision = analysis.getObject().Precision or 2
                 if not Dup_keyword:
                     del parsed[keyword]
                 elif "No Interim Field" in Dup_keyword:
