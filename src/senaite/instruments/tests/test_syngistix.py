@@ -58,7 +58,7 @@ class TestSyngistix(BaseTestCase):
 
         self.services = [
             self.add_analysisservice(
-                title="Pottassium",
+                title="Potassium",
                 Keyword="K",
                 PointOfCapture="lab",
                 Category=self.add_analysiscategory(title="Metals and Cations"),
