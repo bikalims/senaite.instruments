@@ -196,13 +196,13 @@ class BaseTestCase(PloneTestCase):
         return obj
 
     def add_sampletype(self, **kwargs):
-        folder = self.portal.bika_setup.bika_sampletypes
+        senaite_setup = api.get_senaite_setup()
+        folder = senaite_setup.sampletypes
         if 'folder' in kwargs:
             folder = kwargs.get('folder', folder)
             del(kwargs['folder'])
         obj = _createObjectByType('SampleType', folder, tmpID())
         obj.edit(**kwargs)
-        obj.unmarkCreationFlag()
         renameAfterCreation(obj)
         notify(ObjectInitializedEvent(obj))
         return obj
