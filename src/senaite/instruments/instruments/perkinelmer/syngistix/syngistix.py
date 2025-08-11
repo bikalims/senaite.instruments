@@ -192,6 +192,7 @@ class SyngistixParser(InstrumentResultsFileParser):
         for row in results:
             sample_id = row.get("Sample Id", "")
             del row["Sample Id"]
+
             portal_type = self.get_portal_type(sample_id)
             if portal_type == "AnalysisRequest":
                 self.parse_ar_row(sample_id, row_num, row)
@@ -267,7 +268,7 @@ class SyngistixParser(InstrumentResultsFileParser):
                 analysis = self.get_analysis(ar, keyword)
                 analysis_obj = analysis.getObject()
                 interim_fields = analysis_obj.InterimFields
-                precision = analysis_obj.Precision
+                precision = analysis_obj.Precision or 2
                 field_kws = [x.get("keyword") for x in interim_fields if x]
                 if "Reading" not in field_kws:
                     self.warn(
