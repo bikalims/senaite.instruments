@@ -139,4 +139,10 @@
     factory=".xrf.xrf.xrf.importer"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
 
+   <adapter
+    for="*"
+    name="als_xrf_importer"
+    factory=".xrf.arlperformx4200xrf.alsxrf.importer"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
 </configure>
