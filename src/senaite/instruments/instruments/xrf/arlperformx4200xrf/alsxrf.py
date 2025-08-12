@@ -361,11 +361,11 @@ class ALSXRFParser(InstrumentResultsFileParser):
                 analysis = self.get_duplicate_or_qc_analysis(
                     sample_id, keyword
                 )
-                Dup_keyword = self.getDuplicateKeyword(analysis)
+                dup_keyword = self.getDuplicateKeyword(analysis)
                 precision = analysis.getObject().Precision or 5
-                if not Dup_keyword:
+                if not dup_keyword:
                     del parsed[keyword]
-                elif "No Interim Field" in Dup_keyword:
+                elif "No Interim Field" in dup_keyword:
                     self.warn(
                         msg="No interim field 'Reading' was found for Analysis"
                         "'${kw}' on ${sample_id}."
@@ -469,22 +469,6 @@ class ALSXRFParser(InstrumentResultsFileParser):
         brains = api.search(query, SENAITE_CATALOG)
         return True if brains else False
 
-    @staticmethod
-    def get_reference_sample(reference_sample_id, kw):
-        query = dict(portal_type="ReferenceSample", getId=reference_sample_id)
-        brains = api.search(query, SENAITE_CATALOG)
-        if len(brains) < 1:
-            lmsg = (
-                "No reference sample found for sample {} matching Keyword {}"
-            )
-            msg = lmsg.format(reference_sample_id, kw)
-            raise AnalysisNotFound(msg)
-        if len(brains) > 1:
-            lmsg = "Multiple objects found for sample {} matching Keyword {}"
-            msg = lmsg.format(reference_sample_id, kw)
-            raise MultipleAnalysesFound(msg)
-        return brains[0]
-
     def remove_unwanted_columns(self, row):
         del row["SID Value 1"]
         del row["SID Value 2"]
@@ -563,68 +547,3 @@ class importer(object):
         results = {"errors": errors, "log": logs, "warns": warns}
 
         return json.dumps(results)
-
-
-class MyExport(BrowserView):
-    def __init__(self, context, request):
-        self.context = context
-        self.request = request
-
-    def __call__(self, analyses):
-        uc = api.get_tool("uid_catalog")
-        instrument = self.context.getInstrument()
-        filename = "{}-{}.csv".format(self.context.getId(), instrument.Title())
-
-        layout = self.context.getLayout()
-        tmprows = []
-        parsed_analyses = {}
-        headers = ["Sample Label", "Weight", "Volume", "Dilution"]
-        tmprows.append(headers)
-
-        for indx, item in enumerate(layout):
-            c_uid = item["container_uid"]
-            a_uid = item["analysis_uid"]
-            analysis = uc(UID=a_uid)[0].getObject() if a_uid else None
-            container = uc(UID=c_uid)[0].getObject() if c_uid else None
-
-            if item["type"] == "a":
-                analysis_id = container.id
-            elif item["type"] in "bcd":
-                analysis_id = analysis.getReferenceAnalysesGroupID()
-            if parsed_analyses.get(analysis_id):
-                continue
-            else:
-                tmprows.append([analysis_id, "", "", ""])
-                parsed_analyses[analysis_id] = 10
-
-        result = self.dict_to_string(tmprows)
-
-        setheader = self.request.RESPONSE.setHeader
-        setheader("Content-Length", len(result))
-        setheader("Content-Disposition", "inline; filename=%s" % filename)
-        setheader("Content-Type", "text/csv")
-        self.request.RESPONSE.write(result)
-
-    @staticmethod
-    def dict_to_string(rows):
-        final_rows = ""
-        interim_rows = []
-
-        for row in rows:
-            row = ",".join(str(item) for item in row)
-            interim_rows.append(row)
-        final_rows = "\r\n".join(interim_rows)
-        return final_rows
-
-
-class icp5110oesxport(object):
-    implements(IInstrumentExportInterface)
-    title = "ALS ThermoFisher ARL Perform’X 4200 XRF"
-    __file__ = abspath(__file__)  # noqa
-
-    def __init__(self, context, request=None):
-        self.context = context
-        self.request = request
-
-    def Export(self, context, request):
-        return MyExport(context, request)

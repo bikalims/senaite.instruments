@@ -1,5 +1,5 @@
 <fieldset class="form-group">
-    <legend class="col-form-label-lg">Syngistix</legend>
+    <legend class="col-form-label-lg">ARL Perform'X 4200 XRF</legend>
     <label for='instrument_results_file' class="text-muted">
         You can upload an XLS, XLSX, or CSV file.
     </label>
