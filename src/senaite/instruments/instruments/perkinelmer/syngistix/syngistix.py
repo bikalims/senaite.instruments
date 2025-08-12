@@ -37,7 +37,7 @@ from bika.lims import api
 from bika.lims.browser import BrowserView
 from bika.lims.catalog import CATALOG_ANALYSIS_REQUEST_LISTING
 from senaite.instruments import senaiteMessageFactory as _
-from senaite.core.catalog import ANALYSIS_CATALOG, SENAITE_CATALOG
+from senaite.core.catalog import ANALYSIS_CATALOG
 from senaite.core.exportimport.instruments import (
     IInstrumentAutoImportInterface,
     IInstrumentExportInterface,
@@ -216,8 +216,6 @@ class SyngistixParser(InstrumentResultsFileParser):
             portal_type = ar.portal_type
         elif self.is_analysis_group_id(sample_id):
             portal_type = "DuplicateAnalysis"
-        elif self.is_reference_sample(sample_id):
-            portal_type = "ReferenceSample"
         return portal_type
 
     def parse_row(self, row_nr, parsed, sample_id):
@@ -312,11 +310,11 @@ class SyngistixParser(InstrumentResultsFileParser):
                 analysis = self.get_duplicate_or_qc_analysis(
                     sample_id, keyword
                 )
-                Dup_keyword = self.getDuplicateKeyword(analysis)
+                dup_keyword = self.getDuplicateKeyword(analysis)
                 precision = analysis.getObject().Precision or 2
-                if not Dup_keyword:
+                if not dup_keyword:
                     del parsed[keyword]
-                elif "No Interim Field" in Dup_keyword:
+                elif "No Interim Field" in dup_keyword:
                     self.warn(
                         msg="No interim field 'Reading' was found for Analysis"
                         " '${kw}' on ${sample_id}."
@@ -348,30 +346,6 @@ class SyngistixParser(InstrumentResultsFileParser):
             if "Reading" not in field_kws:
                 keyword = "No Interim Field"
         return keyword
-
-    def getReferenceSampleKeyword(self, sample_id, kw):
-        sample_reference = self.get_reference_sample(sample_id, kw)
-        analysis = self.get_reference_sample_analysis(sample_reference, kw)
-        return analysis.getKeyword()
-
-    def get_reference_sample_analysis(self, reference_sample, kw):
-        kw = kw
-        brains = self.get_reference_sample_analyses(reference_sample)
-        brains = [v for k, v in brains.items() if k == kw]
-        if len(brains) < 1:
-            lmsg = "No analysis found for sample {} matching Keyword {}"
-            msg = lmsg.format(reference_sample, kw)
-            raise AnalysisNotFound(msg)
-        if len(brains) > 1:
-            lmsg = "Multiple objects found for sample {} matching Keyword '{}'"
-            msg = lmsg.format(reference_sample, kw)
-            raise MultipleAnalysesFound(msg)
-        return brains[0]
-
-    @staticmethod
-    def get_reference_sample_analyses(reference_sample):
-        brains = reference_sample.getObject().getReferenceAnalyses()
-        return dict((a.getKeyword(), a) for a in brains)
 
     @staticmethod
     def get_duplicate_or_qc_analysis(analysis_id, kw):
@@ -438,28 +412,6 @@ class SyngistixParser(InstrumentResultsFileParser):
         )
         brains = api.search(query, ANALYSIS_CATALOG)
         return True if brains else False
-
-    @staticmethod
-    def is_reference_sample(reference_sample_id):
-        query = dict(portal_type="ReferenceSample", getId=reference_sample_id)
-        brains = api.search(query, SENAITE_CATALOG)
-        return True if brains else False
-
-    @staticmethod
-    def get_reference_sample(reference_sample_id, kw):
-        query = dict(portal_type="ReferenceSample", getId=reference_sample_id)
-        brains = api.search(query, SENAITE_CATALOG)
-        if len(brains) < 1:
-            lmsg = (
-                "No reference sample found for sample {} matching Keyword {}"
-            )
-            msg = lmsg.format(reference_sample_id, kw)
-            raise AnalysisNotFound(msg)
-        if len(brains) > 1:
-            lmsg = "Multiple objects found for sample {} matching Keyword {}"
-            msg = lmsg.format(reference_sample_id, kw)
-            raise MultipleAnalysesFound(msg)
-        return brains[0]
 
     def remove_unwanted_columns(self, row):
         del row["R"]
