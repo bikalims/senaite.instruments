@@ -157,4 +157,10 @@
     factory=".xrf.arlperformx4200xrf.alsxrf.importer"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
 
+   <adapter
+    for="*"
+    name="pg_dv5000_icp_importer"
+    factory=".pg.dv5000icp.dv5000icp.importer"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
 </configure>
