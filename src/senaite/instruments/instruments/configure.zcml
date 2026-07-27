@@ -163,4 +163,10 @@
     factory=".pg.dv5000icp.dv5000.importer"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
 
+   <adapter
+    for="*"
+    name="axios_xrf_importer"
+    factory=".xrf.axios.axios.importer"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
 </configure>
