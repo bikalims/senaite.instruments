@@ -204,38 +204,83 @@ class DV5000ICPParser(InstrumentResultsFileParser):
             return 0
 
         parsed = {}
+        analyses = ar.getAnalyses()
         for header, value in zip(self.headers, values):
             keyword = self.normalize_keyword(header)
             if not keyword or value == "":
                 continue
-            analysis = self.get_analysis(ar, keyword)
-            if not analysis:
-                continue
-            parsed[keyword] = value
+            self.add_result(
+                parsed, analyses, keyword, value, sample_id, row_nr)
 
         self._addRawResult(sample_id, parsed)
         return 0
 
     def parse_duplicate_and_reference_row(self, sample_id, row_nr, values):
+        query = dict(
+            portal_type=["DuplicateAnalysis", "ReferenceAnalysis"],
+            getReferenceAnalysesGroupID=sample_id,
+        )
+        analyses = api.search(query, ANALYSIS_CATALOG)
         parsed = {}
         for header, value in zip(self.headers, values):
             keyword = self.normalize_keyword(header)
             if not keyword or value == "":
                 continue
-            try:
-                analysis = self.get_duplicate_or_qc_analysis(sample_id, keyword)
-            except Exception:
-                self.warn(
-                    msg="Error getting analysis for '${kw}': ${sample_id}",
-                    mapping={"kw": keyword, "sample_id": sample_id},
-                    numline=row_nr,
-                )
-                continue
-            if analysis:
-                parsed[keyword] = value
+            self.add_result(
+                parsed, analyses, keyword, value, sample_id, row_nr)
 
         self._addRawResult(sample_id, parsed)
         return 0
+
+    def add_result(self, parsed, analyses, instrument_keyword, value,
+                   sample_id, row_nr):
+        """Add a direct result, falling back to a unique interim match."""
+        direct = [analysis for analysis in analyses
+                  if self.analysis_keyword(analysis) == instrument_keyword]
+        if len(direct) == 1:
+            parsed[instrument_keyword] = {
+                "Result": value,
+                "DefaultResult": "Result",
+            }
+            return
+
+        # An analysis keyword takes precedence even when another analysis uses
+        # the same text for an interim field.
+        if direct:
+            matches = direct
+        else:
+            matches = [analysis for analysis in analyses
+                       if instrument_keyword in
+                       self.interim_keywords(analysis)]
+        if len(matches) == 1:
+            keyword = self.analysis_keyword(matches[0])
+            parsed[keyword] = {
+                instrument_keyword: value,
+                "DefaultResult": instrument_keyword,
+            }
+            return
+
+        reason = "multiple analyses match" if matches \
+            else "no analysis or interim field matches"
+        self.warn(
+            msg=("Result '${kw}' for '${sample_id}' was not imported: "
+                 "${reason}"),
+            mapping={"kw": instrument_keyword, "sample_id": sample_id,
+                     "reason": reason},
+            numline=row_nr,
+        )
+
+    @staticmethod
+    def analysis_keyword(analysis):
+        return analysis.getKeyword
+
+    @staticmethod
+    def interim_keywords(analysis):
+        obj = analysis.getObject() if hasattr(analysis, "getObject") \
+            else analysis
+        fields = obj.getInterimFields() if hasattr(obj, "getInterimFields") \
+            else getattr(obj, "InterimFields", [])
+        return [field.get("keyword") for field in fields if field]
 
     def get_portal_type(self, sample_id):
         if self.is_sample(sample_id):
