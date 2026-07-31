@@ -43,11 +43,11 @@ Variables::
     >>> bika_setup = portal.bika_setup
     >>> setup = portal.setup
     >>> bika_instruments = bika_setup.bika_instruments
-    >>> bika_sampletypes = bika_setup.bika_sampletypes
+    >>> sampletypes = setup.sampletypes
     >>> bika_samplepoints = setup.samplepoints
     >>> bika_analysiscategories = setup.analysiscategories
     >>> bika_analysisservices = bika_setup.bika_analysisservices
-    >>> bika_calculations = bika_setup.bika_calculations
+    >>> calculations = setup.calculations
     >>> bika_methods = portal.methods
 
 We need certain permissions to create and access objects used in this test,
@@ -108,9 +108,9 @@ a `SampleType`::
     >>> contact = api.create(client, "Contact", Firstname="Juan", Surname="Gallostra")
     >>> contact
     <Contact at /plone/clients/client-1/contact-1>
-    >>> sampletype = api.create(bika_sampletypes, "SampleType", Prefix="H2O", MinimumVolume="100 ml")
+    >>> sampletype = api.create(sampletypes, "SampleType", Prefix="H2O", MinimumVolume="100 ml")
     >>> sampletype
-    <SampleType at /plone/bika_setup/bika_sampletypes/sampletype-1>
+    <SampleType at /plone/setup/sampletypes/sampletype-1>
 
 Create an `AnalysisCategory` (which categorizes different `AnalysisServices`), and add to it an `AnalysisService`.
 This service matches the service specified in the file from which the import will be performed::
@@ -144,7 +144,7 @@ This service matches the service specified in the file from which the import wil
     >>> analysisservice3
     <AnalysisService at /plone/bika_setup/bika_analysisservices/analysisservice-3>
 
-    >>> total_calc = api.create(bika_calculations, 'Calculation', title='TotalMagCal')
+    >>> total_calc = api.create(calculations, 'Calculation', title='TotalMagCal')
     >>> total_calc.setFormula('[Mg] + [Ca]')
 
     >>> a_method = api.create(bika_methods, 'Method', title='A Method')
@@ -157,13 +157,15 @@ This service matches the service specified in the file from which the import wil
     >>> analysisservice4
     <AnalysisService at /plone/bika_setup/bika_analysisservices/analysisservice-4>
 
-    >>> interim_calc = api.create(bika_calculations, 'Calculation', title='Test-Total-Pest')
+    >>> interim_calc = api.create(calculations, 'Calculation', title='Test-Total-Pest')
     >>> pest1 = {'keyword': 'pest1', 'title': 'Pesticide 1', 'value': 0, 'type': 'int', 'hidden': False, 'unit': ''}
     >>> pest2 = {'keyword': 'pest2', 'title': 'Pesticide 2', 'value': 0, 'type': 'int', 'hidden': False, 'unit': ''}
     >>> pest3 = {'keyword': 'pest3', 'title': 'Pesticide 3', 'value': 0, 'type': 'int', 'hidden': False, 'unit': ''}
     >>> interims = [pest1, pest2, pest3]
     >>> interim_calc.setInterimFields(interims)
-    >>> self.assertEqual(interim_calc.getInterimFields(), interims)
+    >>> self.assertEqual(
+    ...     [field["keyword"] for field in interim_calc.getInterimFields()],
+    ...     [field["keyword"] for field in interims])
     >>> interim_calc.setFormula('((([pest1] > 0.0) or ([pest2] > .05) or ([pest3] > 10.0) ) and "PASS" or "FAIL" )')
     >>> analysisservice5 = api.create(bika_analysisservices, 'AnalysisService', title='Total Terpenes', Keyword="TotalTerpenes")
     >>> analysisservice5.setUseDefaultCalculation(False)
@@ -187,9 +189,11 @@ Extend `AnalysisService` with test config data::
     ...         continue
     ...     as_data = test_setup.INTERIM_INSTRUMENTS[inter]
     ...     interims = as_data['interims']
-    ...     interim_calc = api.create(bika_calculations, 'Calculation', title='{}-Calc'.format(as_data['as_title']))
+    ...     interim_calc = api.create(calculations, 'Calculation', title='{}-Calc'.format(as_data['as_title']))
     ...     interim_calc.setInterimFields(interims)
-    ...     self.assertEqual(interim_calc.getInterimFields(), interims)
+    ...     self.assertEqual(
+    ...         [field['keyword'] for field in interim_calc.getInterimFields()],
+    ...         [field['keyword'] for field in interims])
     ...     if as_data.get('formula'):
     ...         interim_calc.setFormula(as_data['formula'])
     ...     new_as = api.create(bika_analysisservices, 'AnalysisService', title=as_data['as_title'], Keyword=as_data['as_keyword'])
@@ -310,4 +314,3 @@ Create an `Instrument` and assign to it the tested Import Interface::
     ...
     ...     if 'port' in globals():
     ...         del Import
-

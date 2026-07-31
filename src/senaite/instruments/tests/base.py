@@ -130,12 +130,7 @@ class BaseTestCase(PloneTestCase):
         return obj
 
     def add_contact(self, folder, **kwargs):
-        obj = _createObjectByType('Contact', folder, tmpID())
-        obj.edit(**kwargs)
-        obj.unmarkCreationFlag()
-        renameAfterCreation(obj)
-        notify(ObjectInitializedEvent(obj))
-        return obj
+        return api.create(folder, "Contact", **kwargs)
 
     def add_manufacturer(self, **kwargs):
         folder = self.portal.setup.manufacturers
@@ -187,25 +182,12 @@ class BaseTestCase(PloneTestCase):
         return obj
 
     def add_calculation(self, **kwargs):
-        folder = self.portal.bika_setup.bika_calculations
-        obj = _createObjectByType('Calculation', folder, tmpID())
-        obj.edit(**kwargs)
-        obj.unmarkCreationFlag()
-        renameAfterCreation(obj)
-        notify(ObjectInitializedEvent(obj))
-        return obj
+        folder = self.portal.setup.calculations
+        return api.create(folder, "Calculation", **kwargs)
 
     def add_sampletype(self, **kwargs):
-        senaite_setup = api.get_senaite_setup()
-        folder = senaite_setup.sampletypes
-        if 'folder' in kwargs:
-            folder = kwargs.get('folder', folder)
-            del(kwargs['folder'])
-        obj = _createObjectByType('SampleType', folder, tmpID())
-        obj.edit(**kwargs)
-        renameAfterCreation(obj)
-        notify(ObjectInitializedEvent(obj))
-        return obj
+        folder = kwargs.pop("folder", self.portal.setup.sampletypes)
+        return api.create(folder, "SampleType", **kwargs)
 
     def add_analysisrequest(self, client, kwargs, services):
         return create_analysisrequest(client, self.request, kwargs, services)
