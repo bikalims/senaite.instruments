@@ -240,7 +240,7 @@ class quantitativeexport(object):
 
         # for looking up "cup" number (= slot) of ARs
         parent_to_slot = {}
-        layout = context.getLayout()
+        layout = context.getLayoutView()
         for item in layout:
             p_uid = item.get('parent_uid')
             if not p_uid:

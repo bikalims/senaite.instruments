@@ -553,7 +553,7 @@ class MyExport(BrowserView):
 
         sample_cases = {'a': 'SAMP', 'b': 'BLANK', 'c': 'CRM', 'd': 'DUP'}
 
-        layout = self.context.getLayout()
+        layout = self.context.getLayoutView()
         tmprows = []
         sample_dict = {}
 

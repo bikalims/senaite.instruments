@@ -446,7 +446,7 @@ class MyExport(BrowserView):
             self.context.getId(), instrument.Title())
         now = DateTime().strftime('%m/%d/%Y')
 
-        layout = self.context.getLayout()
+        layout = self.context.getLayoutView()
         tmprows = []
         parsed_analyses = {}
         headers = ["#Sample Number", "#ID", "#Date", "#LIMS ID"]

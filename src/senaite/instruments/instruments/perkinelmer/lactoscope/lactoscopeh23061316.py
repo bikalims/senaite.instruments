@@ -535,7 +535,7 @@ class MyExport(BrowserView):
         instrument = self.context.getInstrument()
         filename = "{}-{}.csv".format(self.context.getId(), instrument.Title())
 
-        layout = self.context.getLayout()
+        layout = self.context.getLayoutView()
         tmprows = []
         parsed_analyses = {}
         headers = ["Sample Label", "Weight", "Volume", "Dilution"]
