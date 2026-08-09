@@ -178,7 +178,7 @@ class aorcimport(object):
                 errors = importer.errors
                 logs = importer.logs
                 warns = importer.warns
-            except Exception as e:
+            except Exception:
                 tbex = traceback.format_exc()
                 errors.append(tbex)
 
