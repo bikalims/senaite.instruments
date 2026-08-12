@@ -88,10 +88,10 @@ class AvioParser(DV5000ICPParser):
 
     @staticmethod
     def normalize_keyword(header):
-        """Turn ``Fe-lb 238.863 (cps)`` into the AS keyword ``Fe``."""
-        keyword = header.split(None, 1)[0] if header else ""
-        keyword = re.sub(r"-?lb$", "", keyword, flags=re.IGNORECASE)
-        return re.sub(r"[^A-Za-z0-9]", "", keyword)
+        """Turn ``Fe-lb 238.863 (cps)`` into ``Fe238863``."""
+        header = re.sub(r"\b(?:lb|cps)\b", "", header,
+                        flags=re.IGNORECASE)
+        return re.sub(r"[^A-Za-z0-9]", "", header)
 
 
 class importer(object):

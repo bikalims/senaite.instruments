@@ -50,10 +50,10 @@ class TestAvio(BaseTestCase):
         category = self.add_analysiscategory(title="ICP")
         self.services = [
             self.add_analysisservice(
-                title="Uranium 424.167", Keyword="U",
+                title="Uranium 424.167", Keyword="U424167",
                 PointOfCapture="lab", Category=category),
             self.add_analysisservice(
-                title="Iron 238.863", Keyword="Fe",
+                title="Iron 238.863", Keyword="Fe238863",
                 PointOfCapture="lab", Category=category),
         ]
         self.sampletype = self.add_sampletype(title="Environmental")
@@ -89,12 +89,12 @@ class TestAvio(BaseTestCase):
 
     def test_header_normalization(self):
         headers = {
-            "U 424.167\n(cps)": "U",
-            "Fe 238.863 (cps)": "Fe",
-            "Fe-lb 238.863 (cps)": "Fe",
-            "Ca 315.887 (cps)": "Ca",
-            "Ca 317.933 (cps)": "Ca",
-            "Mg 279.077 (cps)": "Mg",
+            "U 424.167\n(cps)": "U424167",
+            "Fe 238.863 (cps)": "Fe238863",
+            "Fe-lb 238.863 (cps)": "Fe238863",
+            "Ca 315.887 (cps)": "Ca315887",
+            "Ca 317.933 (cps)": "Ca317933",
+            "Mg 279.077 (cps)": "Mg279077",
             "U3O8 (cps)": "U3O8",
         }
         for header, keyword in headers.items():
@@ -105,9 +105,9 @@ class TestAvio(BaseTestCase):
         ar = self.make_ar("SW07 22.07.26")
         self.import_workbook()
         uranium = ar.getAnalyses(
-            full_objects=True, getKeyword="U")[0]
+            full_objects=True, getKeyword="U424167")[0]
         iron = ar.getAnalyses(
-            full_objects=True, getKeyword="Fe")[0]
+            full_objects=True, getKeyword="Fe238863")[0]
         self.assertEqual(uranium.getResult(), "3786.67267311")
         self.assertEqual(iron.getResult(), "113879.60964")
 
