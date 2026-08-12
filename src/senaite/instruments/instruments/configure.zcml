@@ -165,6 +165,12 @@
 
    <adapter
     for="*"
+    name="perkin_elmer_syngistix_uranium_importer"
+    factory=".perkinelmer.avio.avio.importer"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
+   <adapter
+    for="*"
     name="axios_xrf_importer"
     factory=".xrf.axios.axios.importer"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
