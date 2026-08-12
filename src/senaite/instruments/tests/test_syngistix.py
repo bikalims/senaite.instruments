@@ -20,6 +20,11 @@ from bika.lims import api
 from senaite.instruments.instruments.perkinelmer.syngistix.syngistix import (
     importer,
 )
+from senaite.core.catalog import ANALYSIS_CATALOG
+from senaite.instruments.instruments.perkinelmer.syngistix.syngistix import (
+      MyExport,
+  )
+
 from senaite.instruments.tests import TestFile
 from senaite.instruments.tests.base import BaseTestCase
 from zope.publisher.browser import FileUpload
@@ -172,3 +177,42 @@ class TestSyngistix(BaseTestCase):
         for interim in interims:
             if interim.get("keyword") == "Reading":
                 return interim.get("value")
+
+    def test_reference_sample_weight_uses_analysis_group(self):
+      class Analysis(object):
+          def getReferenceAnalysesGroupID(self):
+              return "QC-001"
+
+      class WeightAnalysis(object):
+          def getResult(self):
+              return "1.25"
+
+      class Brain(object):
+          getKeyword = "WeightDigested"
+
+          def getObject(self):
+              return WeightAnalysis()
+
+      original_search = api.search
+      searches = []
+
+      def search(query, catalog):
+          searches.append((query, catalog))
+          return [Brain()]
+
+      api.search = search
+      try:
+          export = MyExport(self.portal, self.portal.REQUEST)
+          weight = export.get_reference_sample_weight_value(Analysis())
+      finally:
+          api.search = original_search
+
+      self.assertEqual(weight, "1.25")
+      self.assertEqual(
+          searches[0][0],
+          {
+              "portal_type": ["DuplicateAnalysis", "ReferenceAnalysis"],
+              "getReferenceAnalysesGroupID": "QC-001",
+          },
+      )
+      self.assertEqual(searches[0][1], ANALYSIS_CATALOG)
