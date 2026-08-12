@@ -530,7 +530,7 @@ class MyExport(BrowserView):
                 weight_value = self.get_sample_weight_value(sample)
             elif item["type"] in "bcd":
                 analysis_id = analysis.getReferenceAnalysesGroupID()
-                weight_value = self.get_reference_sample_weight_value(sample)
+                weight_value = self.get_reference_sample_weight_value(analysis)
 
             if parsed_analyses.get(analysis_id):
                 continue
@@ -561,13 +561,19 @@ class MyExport(BrowserView):
             weight_value = ""
         return weight_value
 
-    def get_reference_sample_weight_value(self, sample):
+    def get_reference_sample_weight_value(self, analysis):
         weight_kw = "WeightDigested"
-        services = sample.getReferenceAnalyses()
-        services_kw = [x.Keyword for x in services]
+        query = {
+            "portal_type": ["DuplicateAnalysis", "ReferenceAnalysis"],
+            "getReferenceAnalysesGroupID":
+                analysis.getReferenceAnalysesGroupID(),
+        }
+        services = api.search(query, ANALYSIS_CATALOG)
+        services_kw = [x.getKeyword for x in services]
+
         if weight_kw in services_kw:
             weight_indx = services_kw.index(weight_kw)
-            weight_object = services[weight_indx]
+            weight_object = services[weight_indx].getObject()
             weight_value = weight_object.getResult()
         else:
             weight_value = ""
