@@ -93,6 +93,23 @@ class AxiosXRFParser(InstrumentResultsFileParser):
     def add_result(self, parsed, analyses, instrument_keyword, value, row,
                    columns, sample_id, row_nr):
         """Add a direct result, or use the header as an interim keyword."""
+        if instrument_keyword == "U3O8":
+            u3o8_analyses = [a for a in analyses
+                              if "U3O8" in self.analysis_keyword(a)]
+            if len(u3o8_analyses) > 1:
+                self.warn(
+                    msg=("Duplicate U3O8 Analyses found, please capture "
+                         "manually"),
+                    numline=row_nr)
+                return
+            if len(u3o8_analyses) == 1:
+                analysis = u3o8_analyses[0]
+                keyword = self.analysis_keyword(analysis)
+                payload = {"Result": value, "DefaultResult": "Result"}
+                payload.update(self.get_interims(analysis, row, columns))
+                parsed[keyword] = payload
+                return
+
         direct = [a for a in analyses
                   if self.analysis_keyword(a) == instrument_keyword]
         if len(direct) == 1:

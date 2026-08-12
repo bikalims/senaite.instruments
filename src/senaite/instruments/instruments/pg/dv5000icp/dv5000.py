@@ -235,6 +235,25 @@ class DV5000ICPParser(InstrumentResultsFileParser):
     def add_result(self, parsed, analyses, instrument_keyword, value,
                    sample_id, row_nr):
         """Add a direct result, falling back to a unique interim match."""
+        if instrument_keyword == "U3O8":
+            u3o8_analyses = [analysis for analysis in analyses
+                              if "U3O8" in
+                              self.analysis_keyword(analysis)]
+            if len(u3o8_analyses) > 1:
+                self.warn(
+                    msg=("Duplicate U3O8 Analyses found, please capture "
+                         "manually"),
+                    numline=row_nr,
+                )
+                return
+            if len(u3o8_analyses) == 1:
+                keyword = self.analysis_keyword(u3o8_analyses[0])
+                parsed[keyword] = {
+                    "Result": value,
+                    "DefaultResult": "Result",
+                }
+                return
+
         direct = [analysis for analysis in analyses
                   if self.analysis_keyword(analysis) == instrument_keyword]
         if len(direct) == 1:

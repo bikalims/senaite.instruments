@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import cStringIO
+import json
 from datetime import datetime
 from os.path import abspath
 from os.path import dirname
@@ -75,3 +76,58 @@ class TestAxiosXRF(BaseTestCase):
         interims = dict((item["keyword"], item.get("value"))
                         for item in analysis.getInterimFields())
         self.assertEqual(interims["SumOfConc"], "86.186")
+
+    def test_u3o8_header_matches_keyword_containing_u3o8(self):
+        service = self.add_analysisservice(
+            title="Uranium solution", Keyword="U3O8_sol",
+            PointOfCapture="lab", Category=self.category)
+        ar = self.add_analysisrequest(
+            self.client,
+            dict(Client=self.client.UID(), Contact=self.contact.UID(),
+                 DateSampled=datetime.now().date().isoformat(),
+                 SampleType=self.sampletype.UID()),
+            [service.UID()])
+        ar.setId("AMIS0087")
+        api.do_transition_for(ar, "receive")
+
+        response = self.import_file()
+
+        self.assertEqual(response["errors"], [])
+        analysis = ar.getAnalyses(
+            full_objects=True, getKeyword="U3O8_sol")[0]
+        self.assertEqual(analysis.getResult(), "242.431")
+
+    def test_u3o8_header_does_not_import_when_multiple_analyses_match(self):
+        services = [
+            self.add_analysisservice(
+                title="Uranium solids", Keyword="U3O8_solids",
+                PointOfCapture="lab", Category=self.category),
+            self.add_analysisservice(
+                title="Uranium slurry", Keyword="U3O8_slurry",
+                PointOfCapture="lab", Category=self.category),
+        ]
+        ar = self.add_analysisrequest(
+            self.client,
+            dict(Client=self.client.UID(), Contact=self.contact.UID(),
+                 DateSampled=datetime.now().date().isoformat(),
+                 SampleType=self.sampletype.UID()),
+            [service.UID() for service in services])
+        ar.setId("AMIS0087")
+        api.do_transition_for(ar, "receive")
+
+        response = self.import_file()
+
+        analyses = ar.getAnalyses(full_objects=True)
+        self.assertTrue(all(not analysis.getResult() for analysis in analyses))
+        self.assertTrue(any(
+            "Duplicate U3O8 Analyses found, please capture manually" in warning
+            for warning in response["warns"]))
+
+    def import_file(self):
+        data = open(FILE, "rb").read()
+        upload = FileUpload(TestFile(cStringIO.StringIO(data), FILE))
+        request = TestRequest(form=dict(
+            submitted=True, artoapply="received_tobeverified",
+            results_override="override", instrument_results_file=upload,
+            instrument=api.get_uid(self.instrument)))
+        return json.loads(importer.Import(self.portal, request))

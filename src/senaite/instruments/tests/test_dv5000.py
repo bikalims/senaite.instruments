@@ -13,6 +13,7 @@ from plone.app.testing import setRoles
 
 from bika.lims import api
 from senaite.instruments.instruments.pg.dv5000icp.dv5000 import (
+    DV5000ICPParser,
     importer,
 )
 from senaite.instruments.tests import TestFile
@@ -226,3 +227,33 @@ class TestDV5000(BaseTestCase):
                         for field in analysis.getInterimFields())
         self.assertEqual(interims[interim_keyword], "0.084")
         self.assertEqual(analysis.getResult(), "0.168")
+
+    def test_u3o8_header_matches_keyword_containing_u3o8(self):
+        parser = DV5000ICPParser.__new__(DV5000ICPParser)
+        parsed = {}
+        analysis = type("Analysis", (object,), {"getKeyword": "U3O8_sol"})()
+
+        parser.add_result(
+            parsed, [analysis], "U3O8", "12.34", "BATCH 61 B", 4)
+
+        self.assertEqual(parsed, {
+            "U3O8_sol": {"Result": "12.34", "DefaultResult": "Result"},
+        })
+
+    def test_u3o8_header_does_not_import_multiple_matching_analyses(self):
+        parser = DV5000ICPParser.__new__(DV5000ICPParser)
+        warnings = []
+        parser.warn = lambda **kwargs: warnings.append(kwargs["msg"])
+        parsed = {}
+        analyses = [
+            type("Analysis", (object,), {"getKeyword": "U3O8_solids"})(),
+            type("Analysis", (object,), {"getKeyword": "U3O8_slurry"})(),
+        ]
+
+        parser.add_result(
+            parsed, analyses, "U3O8", "12.34", "BATCH 61 B", 4)
+
+        self.assertEqual(parsed, {})
+        self.assertEqual(warnings, [
+            "Duplicate U3O8 Analyses found, please capture manually",
+        ])
