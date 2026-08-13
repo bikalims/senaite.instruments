@@ -175,4 +175,10 @@
     factory=".xrf.axios.axios.importer"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
 
+   <adapter
+    for="*"
+    name="rigaku_xrf_importer"
+    factory=".xrf.rigaku.rigaku.importer"
+    provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>
+
 </configure>
