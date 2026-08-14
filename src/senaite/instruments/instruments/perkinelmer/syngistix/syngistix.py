@@ -20,6 +20,7 @@
 
 import csv
 import json
+import re
 import types
 import traceback
 from Products.CMFPlone.utils import safe_unicode
@@ -207,6 +208,13 @@ class SyngistixParser(InstrumentResultsFileParser):
             row_num = row_num + 1
         return 1
 
+    @staticmethod
+    def normalize_keyword(header):
+        """Convert a Syngistix result header into an analysis keyword."""
+        header = re.sub(r"\([^)]*\)", "", header or "")
+        header = re.sub(r"-?lb\b", "", header, flags=re.IGNORECASE)
+        return re.sub(r"[^A-Za-z0-9]", "", header)
+
     def get_portal_type(self, sample_id):
         portal_type = None
         if self.is_sample(sample_id):
@@ -229,7 +237,7 @@ class SyngistixParser(InstrumentResultsFileParser):
         repeat_indexes = []
         repeat_keys = []
         items = row.items()
-        keywords = [x[0].split(" ", 1)[0] for x in items]
+        keywords = [self.normalize_keyword(x[0]) for x in items]
         for key_indx, key in enumerate(keywords):
             if keywords.count(key) > 1:
                 repeat_indexes.append(key_indx)
@@ -252,7 +260,7 @@ class SyngistixParser(InstrumentResultsFileParser):
         ar = self.get_ar(sample_id)
         items, indexes = self.find_repeated_results(row, sample_id, row_nr)
         items = self.remove_repeated_results(items, indexes)
-        edited_items = {k.split(" ", 1)[0]: v for k, v in items if k}
+        edited_items = {self.normalize_keyword(k): v for k, v in items if k}
         items = edited_items.items()
         interim_kw = "Reading"
         parsed = {
@@ -296,7 +304,7 @@ class SyngistixParser(InstrumentResultsFileParser):
     def parse_duplicate_and_reference_row(self, sample_id, row_nr, row):
         items, indexes = self.find_repeated_results(row, sample_id, row_nr)
         items = self.remove_repeated_results(items, indexes)
-        edited_items = {k.split(" ", 1)[0]: v for k, v in items if k}
+        edited_items = {self.normalize_keyword(k): v for k, v in items if k}
         items = edited_items.items()
         interim_kw = "Reading"
         parsed = {
