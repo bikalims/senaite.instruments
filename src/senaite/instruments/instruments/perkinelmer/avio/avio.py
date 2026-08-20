@@ -24,15 +24,15 @@ from senaite.instruments.instruments.pg.dv5000icp.dv5000 import (
 )
 
 
-WORKSHEET = "Corrected Intensities"
+WORKSHEET = "Conc. in Sample Units"
 
 
 class AvioParser(DV5000ICPParser):
-    """Read results exclusively from the Corrected Intensities sheet."""
+    """Read results exclusively from the Conc. in Sample Units sheet."""
 
     def __init__(self, infile, worksheet=WORKSHEET, encoding=None):
         # The sheet argument is accepted for importer API compatibility, but
-        # this instrument must never read concentration or RSD sheets.
+        # this instrument must never read intensity or RSD sheets.
         super(AvioParser, self).__init__(
             infile, worksheet=WORKSHEET, encoding=encoding)
 
@@ -88,8 +88,8 @@ class AvioParser(DV5000ICPParser):
 
     @staticmethod
     def normalize_keyword(header):
-        """Turn ``Fe-lb 238.863 (cps)`` into ``Fe238863``."""
-        header = re.sub(r"\b(?:lb|cps)\b", "", header,
+        """Turn ``Fe-lb 238.863 (mg/L)`` into ``Fe238863``."""
+        header = re.sub(r"\b(?:lb|cps|mg\s*/\s*l)\b", "", header,
                         flags=re.IGNORECASE)
         return re.sub(r"[^A-Za-z0-9]", "", header)
 

@@ -82,7 +82,7 @@ class TestAvio(BaseTestCase):
             results_override="override",
             instrument_results_file=upload,
             # Deliberately request another sheet: Avio must ignore this.
-            worksheet="Conc. in Sample Units",
+            worksheet="Corrected Intensities",
             instrument=api.get_uid(self.instrument),
         ))
         return importer.Import(self.portal, request)
@@ -90,6 +90,7 @@ class TestAvio(BaseTestCase):
     def test_header_normalization(self):
         headers = {
             "U 424.167\n(cps)": "U424167",
+            "U 424.167\n(mg/L)": "U424167",
             "Fe 238.863 (cps)": "Fe238863",
             "Fe-lb 238.863 (cps)": "Fe238863",
             "Ca 315.887 (cps)": "Ca315887",
@@ -101,15 +102,15 @@ class TestAvio(BaseTestCase):
             self.assertEqual(
                 AvioParser.normalize_keyword(header), keyword)
 
-    def test_imports_corrected_intensity_for_sample(self):
+    def test_imports_concentration_in_sample_units(self):
         ar = self.make_ar("SW07 22.07.26")
         self.import_workbook()
         uranium = ar.getAnalyses(
             full_objects=True, getKeyword="U424167")[0]
         iron = ar.getAnalyses(
             full_objects=True, getKeyword="Fe238863")[0]
-        self.assertEqual(uranium.getResult(), "3786.67267311")
-        self.assertEqual(iron.getResult(), "113879.60964")
+        self.assertEqual(uranium.getResult(), "0.687963357571")
+        self.assertEqual(iron.getResult(), "9.08346403553")
 
     def test_qc_uses_reference_analysis_group_id(self):
         parser = AvioParser.__new__(AvioParser)

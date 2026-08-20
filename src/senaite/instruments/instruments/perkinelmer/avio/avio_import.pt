@@ -1,7 +1,7 @@
 <fieldset class="form-group">
     <legend class="col-form-label-lg">Perkin Elmer Syngistix Uranium</legend>
     <label for="instrument_results_file" class="text-muted">
-        Upload a Syngistix XLSX workbook. Only the Corrected Intensities sheet
+        Upload a Syngistix XLSX workbook. Only the Conc. in Sample Units sheet
         is imported.
     </label>
     <input type="file" class="form-control-file"
