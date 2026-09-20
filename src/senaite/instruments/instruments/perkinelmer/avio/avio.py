@@ -4,6 +4,8 @@
 import json
 import re
 import traceback
+from decimal import Decimal
+from decimal import InvalidOperation
 from mimetypes import guess_type
 from os.path import abspath
 from os.path import splitext
@@ -92,6 +94,18 @@ class AvioParser(DV5000ICPParser):
         header = re.sub(r"\b(?:lb|cps|mg\s*/\s*l)\b", "", header,
                         flags=re.IGNORECASE)
         return re.sub(r"[^A-Za-z0-9]", "", header)
+
+    def add_result(self, parsed, analyses, instrument_keyword, value,
+                   sample_id, row_nr):
+        """Keep Ca/Mg in ppm and convert other mg/L readings to ppb."""
+        if instrument_keyword[:2] not in ("Ca", "Mg"):
+            try:
+                value = str(Decimal(value) * 1000)
+            except InvalidOperation:
+                # Preserve nonnumeric instrument flags for normal handling.
+                pass
+        return super(AvioParser, self).add_result(
+            parsed, analyses, instrument_keyword, value, sample_id, row_nr)
 
 
 class importer(object):

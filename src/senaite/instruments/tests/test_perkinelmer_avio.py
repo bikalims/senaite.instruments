@@ -109,8 +109,8 @@ class TestAvio(BaseTestCase):
             full_objects=True, getKeyword="U424167")[0]
         iron = ar.getAnalyses(
             full_objects=True, getKeyword="Fe238863")[0]
-        self.assertEqual(uranium.getResult(), "0.687963357571")
-        self.assertEqual(iron.getResult(), "9.08346403553")
+        self.assertEqual(uranium.getResult(), "687.963357571")
+        self.assertEqual(iron.getResult(), "9083.46403553")
 
     def test_qc_uses_reference_analysis_group_id(self):
         parser = AvioParser.__new__(AvioParser)
@@ -132,4 +132,3 @@ class TestAvio(BaseTestCase):
             searches[0]["portal_type"],
             ["DuplicateAnalysis", "ReferenceAnalysis"],
         )
-
