@@ -171,6 +171,12 @@
 
    <adapter
     for="*"
+    name="perkin_elmer_syngistix_worksheet_exporter"
+    factory=".perkinelmer.avio.avio.syngistixexporter"
+    provides="senaite.core.exportimport.instruments.IInstrumentExportInterface"/>
+
+   <adapter
+    for="*"
     name="axios_xrf_importer"
     factory=".xrf.axios.axios.importer"
     provides="senaite.core.exportimport.instruments.IInstrumentImportInterface"/>

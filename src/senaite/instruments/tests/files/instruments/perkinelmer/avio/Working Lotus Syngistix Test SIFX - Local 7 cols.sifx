@@ -1,0 +1,37 @@
+
+[System Description]
+Description=Test LIMS import
+MaxNoOfSamples=250
+[Constant Parameters]
+BatchID=Batch 01
+VolumeUnits=Vol,mL,0.001000,,
+WeightUnits=Wt,g,1.000000,,
+[User Defined List]
+UserDefined1=
+UserDefined2=
+UserDefined3=
+UserDefined4=
+UserDefined5=
+[Variable Parameter List]
+NumberOfParameters=7
+Parameter1=SampleNo
+Parameter2=AutosamplerLocation
+Parameter3=SampleID
+Parameter4=InitialSampleWt
+Parameter5=SamplePrepVolume
+Parameter6=AliquotVolume
+Parameter7=DilutedToVolume
+[Variable Parameter Data]
+NumberOfDataValues=12
+Data1=1,11,QC26-008-012,49.10,,,
+Data2=2,12,RIPSOL26-0060,49.20,,,
+Data3=3,13,RIPSOL26-0059,49.30,,,
+Data4=4,14,RIPSOL26-0058,49.40,,,
+Data5=5,15,RIPSOL26-0057,49.50,,,
+Data6=6,16,RIPSOL26-0056,49.60,,,
+Data7=7,17,RIPSOL26-0055,49.70,,,
+Data8=8,18,RIPSOL26-0054,49.80,,,
+Data9=9,19,RIPSOL26-0053,49.90,,,
+Data10=10,20,QC26-008-013,50.00,,,
+Data11=11,21,RIPSOL26-0052,50.10,,,
+Data12=12,22,RIPSOL26-0051,50.20,,,

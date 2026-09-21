@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Importer for Perkin Elmer Syngistix Uranium result workbooks."""
+"""Perkin Elmer Syngistix result import and SIFX worksheet export."""
 
+import csv
 import json
 import re
 import traceback
@@ -9,13 +10,19 @@ from decimal import InvalidOperation
 from mimetypes import guess_type
 from os.path import abspath
 from os.path import splitext
+from cStringIO import StringIO
 
+from Products.CMFPlone.utils import safe_unicode
+from bika.lims import api
+from bika.lims.browser import BrowserView
 from openpyxl import load_workbook
 from zope.interface import implements
 
 from senaite.instruments import senaiteMessageFactory as _
+from senaite.core.catalog import ANALYSIS_CATALOG
 from senaite.core.exportimport.instruments import (
     IInstrumentAutoImportInterface,
+    IInstrumentExportInterface,
     IInstrumentImportInterface,
 )
 from senaite.core.exportimport.instruments.resultsimport import (
@@ -27,6 +34,105 @@ from senaite.instruments.instruments.pg.dv5000icp.dv5000 import (
 
 
 WORKSHEET = "Conc. in Sample Units"
+
+# Syngistix v5.5 requires the initial empty row and these fixed parameters.
+SIFX_HEADER = (
+    "",
+    "[System Description]",
+    "Description=Test LIMS import",
+    "MaxNoOfSamples=250",
+    "[Constant Parameters]",
+    "BatchID=Batch 01",
+    "VolumeUnits=Vol,mL,0.001000,,",
+    "WeightUnits=Wt,g,1.000000,,",
+    "[User Defined List]",
+    "UserDefined1=",
+    "UserDefined2=",
+    "UserDefined3=",
+    "UserDefined4=",
+    "UserDefined5=",
+    "[Variable Parameter List]",
+    "NumberOfParameters=7",
+    "Parameter1=SampleNo",
+    "Parameter2=AutosamplerLocation",
+    "Parameter3=SampleID",
+    "Parameter4=InitialSampleWt",
+    "Parameter5=SamplePrepVolume",
+    "Parameter6=AliquotVolume",
+    "Parameter7=DilutedToVolume",
+    "[Variable Parameter Data]",
+)
+
+
+class SyngistixWorksheetExport(BrowserView):
+    """Export one SIFX record per occupied worksheet sample position."""
+
+    def __call__(self, analyses):
+        rows = self.get_sample_rows()
+        buffer = StringIO()
+        buffer.write("\r\n".join(SIFX_HEADER) + "\r\n")
+        buffer.write("NumberOfDataValues=%s\r\n" % len(rows))
+        writer = csv.writer(buffer, lineterminator="\r\n")
+        for number, row in enumerate(rows, 1):
+            values = ["Data{0}={0}".format(number)] + row
+            writer.writerow([unicode(safe_unicode(value)).encode("utf-8")
+                             for value in values])
+        result = buffer.getvalue()
+        response = self.request.RESPONSE
+        response.setHeader("Content-Type", "text/csv; charset=utf-8")
+        response.setHeader("Content-Disposition",
+                           'attachment; filename="%s.sifx"' %
+                           self.context.getId())
+        response.setHeader("Content-Length", len(result))
+        response.write(result)
+
+    def get_sample_rows(self):
+        rows = []
+        seen = set()
+        layout = sorted(self.context.getLayoutView(),
+                        key=lambda item: int(item["position"]))
+        for item in layout:
+            sample_type = item.get("type")
+            if sample_type == "a":
+                sample = api.get_object(item["container_uid"])
+                sample_id = sample.getId()
+                weight_analyses = sample.getAnalyses(
+                    getKeyword="InitialSampleWt", full_objects=True)
+            elif sample_type in ("b", "c", "d"):
+                analysis = api.get_object(item["analysis_uid"])
+                sample_id = analysis.getReferenceAnalysesGroupID()
+                weight_analyses = api.search({
+                    "portal_type": ["DuplicateAnalysis", "ReferenceAnalysis"],
+                    "getReferenceAnalysesGroupID": sample_id,
+                    "getKeyword": "InitialSampleWt",
+                }, ANALYSIS_CATALOG)
+            else:
+                continue
+            position = item["position"]
+            key = (position, sample_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            weight = ""
+            if weight_analyses:
+                weight = api.get_object(weight_analyses[0]).getResult()
+                if weight is None:
+                    weight = ""
+            rows.append([position, sample_id, weight, "", "", ""])
+        return rows
+
+
+class syngistixexporter(object):
+    implements(IInstrumentExportInterface)
+    title = "Syngistix Worksheet Exporter"
+    __file__ = abspath(__file__)  # noqa
+
+    def __init__(self, context, request=None):
+        self.context = context
+        self.request = request
+
+    def Export(self, context, request):
+        return SyngistixWorksheetExport(context, request)
 
 
 class AvioParser(DV5000ICPParser):
@@ -171,4 +277,3 @@ class importer(object):
 
     def process(self):
         return self.Import(self.context, request=None)
-
